@@ -1,0 +1,11 @@
+{
+  "name": "pdmeds",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check app.js && node --check src/drugs.js && node --check src/model.js",
+    "test": "node --test",
+    "validate": "npm run check && npm test"
+  }
+}

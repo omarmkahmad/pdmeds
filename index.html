@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Educational visualization of modeled Parkinson medication exposure and levodopa-equivalent daily dose.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>PD Medication Exposure Explorer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="page-shell">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Parkinson medication modeling</p>
+        <h1>PD Medication Exposure Explorer</h1>
+        <p class="subtitle">Compare a daily schedule using normalized exposure curves and current levodopa-equivalent dose proposals.</p>
+      </div>
+      <div class="header-meta">
+        <span class="warning-badge">Educational estimate — not dosing guidance</span>
+        <span class="version-badge" id="modelVersion"></span>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="card" aria-labelledby="regimenTitle">
+        <div class="card-header">
+          <div>
+            <h2 id="regimenTitle">Daily regimen</h2>
+            <p>Dose means the active drug amount. For combination levodopa products, enter the levodopa component only.</p>
+          </div>
+          <span class="example-badge" id="exampleBadge" hidden>Example data</span>
+        </div>
+        <div class="card-body">
+          <div class="table-scroll" role="region" aria-label="Medication regimen table" tabindex="0">
+            <table class="regimen-table">
+              <caption class="sr-only">Daily Parkinson medication doses</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Time</th>
+                  <th scope="col">Medication</th>
+                  <th scope="col">Dose (mg)</th>
+                  <th scope="col">Infusion (min)</th>
+                  <th scope="col">LEDD contribution</th>
+                  <th scope="col"><span class="sr-only">Curve</span></th>
+                  <th scope="col"><span class="sr-only">Remove</span></th>
+                </tr>
+              </thead>
+              <tbody id="regimenBody"></tbody>
+            </table>
+          </div>
+
+          <div class="button-row">
+            <button class="button button-primary" type="button" id="addDose">Add dose</button>
+            <button class="button" type="button" id="loadExample">Load example</button>
+            <button class="button" type="button" id="clearRegimen">Clear regimen</button>
+          </div>
+
+          <fieldset class="settings">
+            <legend>Model settings</legend>
+            <div class="field">
+              <label for="onThreshold">Target-zone threshold <span>(relative units)</span></label>
+              <input type="number" id="onThreshold" min="0" max="20000" step="5" inputmode="decimal" placeholder="e.g. 50">
+            </div>
+            <div class="field">
+              <label for="dyskinesiaThreshold">High-exposure threshold <span>(relative units)</span></label>
+              <input type="number" id="dyskinesiaThreshold" min="0" max="20000" step="5" inputmode="decimal" placeholder="e.g. 120">
+            </div>
+            <div class="field field-small">
+              <label for="days">Days represented</label>
+              <input type="number" id="days" min="1" max="7" step="1" inputmode="numeric" value="2">
+            </div>
+            <div class="field field-wide">
+              <label for="comt">COMT adjustment</label>
+              <select id="comt">
+                <option value="none">None</option>
+                <option value="ent">Entacapone with each levodopa dose</option>
+                <option value="opi">Opicapone once daily</option>
+                <option value="tol">Tolcapone three times daily</option>
+              </select>
+            </div>
+          </fieldset>
+          <p class="form-message" id="formMessage" role="alert"></p>
+          <p class="hint">“Days represented” adds prior-day carryover for longer-half-life medications. Steady-state rows are displayed as constant pseudo-exposure. Thresholds are optional and user-defined; they are not validated clinical On/Off or dyskinesia cutoffs.</p>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="chartTitle">
+        <div class="card-header">
+          <div>
+            <h2 id="chartTitle">Modeled exposure over 24 hours</h2>
+            <p>Relative normalized exposure index—not a measured plasma concentration or direct prediction of clinical effect.</p>
+          </div>
+        </div>
+        <div class="readout" aria-live="polite" aria-atomic="true">
+          <div><span class="readout-label">Time</span><strong id="readoutTime">—</strong></div>
+          <div><span class="readout-label">Relative exposure</span><strong id="readoutValue">—</strong></div>
+          <div><span class="readout-label">User-defined zone</span><strong class="zone-readout" id="readoutZone">Unclassified</strong></div>
+        </div>
+        <p class="contributions" id="readoutContributions"></p>
+        <div id="chartBox" class="chart-box"></div>
+        <div class="chart-control">
+          <label for="timeSlider">Explore time: <output id="sliderTime" for="timeSlider">00:00</output></label>
+          <input type="range" id="timeSlider" min="0" max="1439" step="1" value="0">
+          <p class="hint">Use the slider or Left/Right arrow keys for minute-by-minute values. Page Up/Down moves by one hour.</p>
+        </div>
+        <div class="legend" id="legend" role="group" aria-label="Show or hide medication curves"></div>
+      </section>
+
+      <section class="card" aria-labelledby="statisticsTitle">
+        <div class="card-header"><h2 id="statisticsTitle">Summary</h2></div>
+        <div class="card-body">
+          <div class="stats" id="statistics"></div>
+          <p class="hint">LEDD is a research comparison measure. The remaining values come from this simplified exposure model and should not guide medication changes.</p>
+        </div>
+      </section>
+
+      <details>
+        <summary>Save or load a regimen</summary>
+        <div class="details-body">
+          <p>Exports include a schema version and model version so saved regimens can be interpreted after the model changes.</p>
+          <label class="sr-only" for="regimenJson">Regimen JSON</label>
+          <textarea id="regimenJson" spellcheck="false" placeholder="Export a regimen or paste regimen JSON here"></textarea>
+          <div class="button-row">
+            <button class="button" type="button" id="exportJson">Prepare JSON</button>
+            <button class="button" type="button" id="copyJson">Copy JSON</button>
+            <button class="button" type="button" id="downloadJson">Download JSON</button>
+            <button class="button button-primary" type="button" id="importJson">Load JSON</button>
+          </div>
+          <p class="form-message" id="jsonMessage" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Medication parameters and sources</summary>
+        <div class="details-body">
+          <p>LEDD conversion and exposure-curve shape are stored separately. Component curves are normalized so their integrated area matches the declared exposure factor. “Consensus proposal” does not mean clinically validated equivalence for an individual patient.</p>
+          <div class="table-scroll" role="region" aria-label="Medication parameter table" tabindex="0">
+            <table class="parameter-table">
+              <thead>
+                <tr>
+                  <th scope="col">Medication</th>
+                  <th scope="col">LEDD formula</th>
+                  <th scope="col">Exposure model</th>
+                  <th scope="col">Evidence/source</th>
+                </tr>
+              </thead>
+              <tbody id="parameterBody"></tbody>
+            </table>
+          </div>
+          <p><strong>Not included:</strong> medications without a suitable exposure representation remain outside the graph even when a research LED proposal exists. Investigational or legacy products are labeled as such.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Model assumptions and limitations</summary>
+        <div class="details-body prose">
+          <p><strong>Exposure shapes.</strong> Oral and injected doses use a simplified linear rise to a peak followed by exponential elimination. Extended-release products use multiple components. Infusions approach a modeled steady level and decay after stopping. Component areas are normalized to a declared exposure factor.</p>
+          <p><strong>Not literal cross-drug plasma concentrations.</strong> Dopamine agonists, MAO-B inhibitors, amantadine, safinamide, and istradefylline do not become levodopa. Their curves are pseudo-exposure representations used only to make a regimen easier to inspect.</p>
+          <p><strong>COMT adjustment.</strong> LEDD uses the 2023 consensus factors. Exposure multipliers use approximate label-reported levodopa AUC effects: entacapone 1.35×, opicapone 1.78×, and tolcapone 2×. These simplified multipliers do not reproduce individual dose timing, food effects, or variability.</p>
+          <p><strong>Important omissions.</strong> Absorption lag, protein and meal effects, gastroparesis, renal/hepatic function, endogenous dopamine, drug interactions, rescue-dose context, and person-to-person variability are not modeled. Pharmacokinetics is not pharmacodynamics.</p>
+          <p><strong>Primary conversion reference.</strong> Jost ST et al. <a href="https://movementdisorders.onlinelibrary.wiley.com/doi/10.1002/mds.29410" target="_blank" rel="noopener noreferrer">Levodopa Dose Equivalency in Parkinson’s Disease: Updated Systematic Review and Proposals</a>. Movement Disorders. 2023.</p>
+        </div>
+      </details>
+    </main>
+
+    <footer class="site-footer">
+      <p>Population-level educational model. Do not start, stop, or change medication based on this tool. Discuss medication decisions with a qualified clinician.</p>
+      <p>This site runs entirely in your browser and does not transmit regimen data.</p>
+    </footer>
+  </div>
+  <noscript>This tool requires JavaScript to calculate and draw exposure curves.</noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
