@@ -1,698 +1,176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PD Medication Pharmacokinetics — Levodopa-Equivalent Plasma Levels</title>
-<style>
-:root{
-  --ink:#000000;
-  --paper:#ffffff;
-  --panel:#f4f4f3;
-  --rule:#666666;
-  --rule-lt:#c9c9c9;
-  --head:#efefef;
-  --dim:#5f5f5f;
-  --off:#bfbfbf;
-  --dysk:#4d4d4d;
-}
-*{box-sizing:border-box;}
-html,body{margin:0;padding:0;}
-body{
-  font-family:"Myriad Pro","Myriad Pro SemiCondensed","Segoe UI",Helvetica,Arial,sans-serif;
-  color:var(--ink);
-  background:var(--paper);
-  font-size:15px;
-  line-height:1.35;
-}
-.wrap{max-width:1080px;margin:0 auto;padding:0 16px 40px;}
-header.site{border-bottom:2px solid var(--ink);padding:20px 0 12px;margin-bottom:16px;}
-header.site h1{font-size:26px;font-weight:700;margin:0;letter-spacing:-0.01em;}
-header.site .sub{margin:2px 0 0;color:var(--dim);font-size:14px;}
-header.site .flag{display:inline-block;margin-top:6px;border:1px solid var(--ink);padding:1px 8px;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;}
-h2{font-size:17px;font-weight:700;margin:0;}
-.card{border:1px solid var(--rule);margin-bottom:16px;background:var(--paper);}
-.card > .chead{background:var(--head);border-bottom:1px solid var(--rule);padding:8px 12px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
-.card > .chead .note{font-size:12.5px;color:var(--dim);}
-.card > .cbody{padding:12px;}
-
-/* Regimen table */
-table.reg{width:100%;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:12.5px;}
-table.reg th,table.reg td{border:1px solid var(--rule);padding:4px 6px;text-align:center;vertical-align:middle;}
-table.reg th{background:var(--head);font-weight:700;}
-table.reg td.drugcell{text-align:left;}
-table.reg input[type="time"]{width:96px;}
-table.reg input[type="number"]{width:78px;}
-table.reg select{max-width:300px;width:100%;}
-input,select,button,textarea{font-family:inherit;font-size:13px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);padding:4px 6px;}
-input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--ink);outline-offset:1px;}
-button{cursor:pointer;background:var(--paper);font-weight:700;}
-button:hover{background:var(--head);}
-button.primary{background:var(--ink);color:var(--paper);border-color:var(--ink);}
-button.primary:hover{background:#333;}
-button.xdel{border:none;background:none;font-weight:700;font-size:14px;padding:2px 6px;}
-.chip{display:inline-block;width:14px;height:14px;border:1px solid var(--ink);vertical-align:middle;}
-.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-.hint{font-size:12px;color:var(--dim);margin-top:6px;}
-
-/* Settings */
-.settings{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;border-top:1px solid var(--rule-lt);padding-top:10px;}
-.settings .fld{display:flex;flex-direction:column;gap:2px;}
-.settings label{font-size:12px;font-weight:700;}
-.settings input[type="number"]{width:90px;}
-
-/* Chart card */
-.readout{display:flex;gap:26px;align-items:baseline;flex-wrap:wrap;padding:10px 12px 2px;}
-.readout .big{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1;}
-.readout .lbl{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--dim);}
-.readout .state{font-size:20px;font-weight:700;align-self:center;}
-.contrib{padding:0 12px 6px;font-size:12.5px;color:var(--dim);min-height:18px;font-variant-numeric:tabular-nums;}
-#chartbox{position:relative;padding:0 6px 6px;touch-action:pan-y;}
-#chartbox svg{display:block;width:100%;height:auto;cursor:crosshair;}
-.legend{display:flex;gap:6px 16px;flex-wrap:wrap;padding:8px 12px 12px;font-size:12.5px;border-top:1px solid var(--rule-lt);}
-.legend .li{display:flex;gap:6px;align-items:center;cursor:pointer;user-select:none;}
-.legend .li.off{opacity:0.35;text-decoration:line-through;}
-.legend .swatch{width:16px;height:3px;display:inline-block;}
-.legend .li.total .swatch{height:4px;}
-
-/* Stats */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
-.stat{border:1px solid var(--rule);padding:8px 10px;background:var(--panel);}
-.stat .v{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;}
-.stat .k{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--dim);}
-.stat .s{font-size:11.5px;color:var(--dim);}
-
-/* Details sections */
-details{border:1px solid var(--rule);margin-bottom:12px;}
-details summary{padding:8px 12px;background:var(--head);font-weight:700;cursor:pointer;list-style:none;}
-details summary::before{content:"+ ";}
-details[open] summary::before{content:"− ";}
-details .dbody{padding:12px;font-size:13.5px;}
-table.pk{width:100%;border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;font-size:11.5px;}
-table.pk th,table.pk td{border:1px solid var(--rule);padding:3px 6px;text-align:center;}
-table.pk th{background:var(--head);}
-table.pk td:first-child,table.pk td:nth-child(4){text-align:left;}
-textarea#jsonio{width:100%;min-height:110px;font-family:ui-monospace,Consolas,monospace;font-size:12px;}
-footer.site{border-top:2px solid var(--ink);margin-top:8px;padding-top:10px;font-size:12px;color:var(--dim);}
-a{color:#0563C1;}
-details .dbody p{margin:0 0 8px;}
-details .dbody ul{margin:0 0 8px;padding-left:20px;}
-@media (max-width:700px){
-  .readout .big{font-size:26px;}
-  table.reg select{max-width:170px;}
-}
-@media print{
-  .btnrow,.settings,details:not([open]),button,.hint{display:none !important;}
-  .card,details{border-color:#000;}
-  body{font-size:12px;}
-}
-@media (prefers-reduced-motion:no-preference){
-  button{transition:background 0.12s ease;}
-}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Educational visualization of modeled Parkinson medication exposure and levodopa-equivalent daily dose.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>PD Medication Exposure Explorer</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="wrap">
-
-<header class="site">
-  <h1>PD Medication Pharmacokinetics</h1>
-  <p class="sub">Minute-by-minute levodopa-equivalent plasma levels from a daily Parkinson&rsquo;s medication schedule. Modeled after the Parkinson&rsquo;s Measurement toolbox (J.&nbsp;Turner), extended to current formulations.</p>
-  <span class="flag">Educational estimate — not dosing guidance</span>
-</header>
-
-<section class="card" id="regimenCard">
-  <div class="chead"><h2>Daily regimen</h2><span class="note">Dose = levodopa component only for combination products (Sinemet, Stalevo, Rytary, Crexont, Madopar, Duopa, Vyalev). Patch dose = patch strength (mg/24 h).</span></div>
-  <div class="cbody">
-    <table class="reg" id="regTable">
-      <thead>
-        <tr><th>Time</th><th>Drug</th><th>Dose (mg)</th><th>Infusion length (min)</th><th>LED (mg)</th><th>Colour</th><th></th></tr>
-      </thead>
-      <tbody id="regBody"></tbody>
-    </table>
-    <div class="btnrow">
-      <button class="primary" id="btnAdd">+ Add dose</button>
-      <button id="btnExample">Load example regimen</button>
-      <button id="btnClear">Clear all</button>
-    </div>
-    <div class="settings">
-      <div class="fld"><label for="onThr">&ldquo;On&rdquo; threshold (LED mg)</label><input type="number" id="onThr" min="0" step="5" placeholder="e.g. 50"></div>
-      <div class="fld"><label for="dysThr">Dyskinesia threshold (LED mg)</label><input type="number" id="dysThr" min="0" step="5" placeholder="e.g. 120"></div>
-      <div class="fld"><label for="days">Days in treatment (1–7)</label><input type="number" id="days" min="1" max="7" step="1" value="2"></div>
-      <div class="fld"><label for="comt">COMT inhibitor on board</label>
-        <select id="comt">
-          <option value="none">None</option>
-          <option value="ent">Entacapone with each levodopa dose</option>
-          <option value="opi">Opicapone once daily</option>
-          <option value="tol">Tolcapone TID</option>
-        </select>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="page-shell">
+    <header class="site-header">
+      <div>
+        <p class="eyebrow">Parkinson medication modeling</p>
+        <h1>PD Medication Exposure Explorer</h1>
+        <p class="subtitle">Compare a daily schedule using normalized exposure curves and current levodopa-equivalent dose proposals.</p>
       </div>
-    </div>
-    <p class="hint">Longer &ldquo;days in treatment&rdquo; carries over yesterday&rsquo;s doses for long-half-life drugs (amantadine, agonists). Patches and MAO-B inhibitors are modeled at steady state regardless. The COMT setting applies LCE kinetics (&uarr;T<sub>max</sub>, &uarr;T<sub>&frac12;</sub>, C<sub>max</sub>&nbsp;&times;1.08) to levodopa-containing doses; Stalevo already includes it.</p>
+      <div class="header-meta">
+        <span class="warning-badge">Educational estimate — not dosing guidance</span>
+        <span class="version-badge" id="modelVersion"></span>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="card" aria-labelledby="regimenTitle">
+        <div class="card-header">
+          <div>
+            <h2 id="regimenTitle">Daily regimen</h2>
+            <p>Dose means the active drug amount. For combination levodopa products, enter the levodopa component only.</p>
+          </div>
+          <span class="example-badge" id="exampleBadge" hidden>Example data</span>
+        </div>
+        <div class="card-body">
+          <div class="table-scroll" role="region" aria-label="Medication regimen table" tabindex="0">
+            <table class="regimen-table">
+              <caption class="sr-only">Daily Parkinson medication doses</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Time</th>
+                  <th scope="col">Medication</th>
+                  <th scope="col">Dose (mg)</th>
+                  <th scope="col">Infusion (min)</th>
+                  <th scope="col">LEDD contribution</th>
+                  <th scope="col"><span class="sr-only">Curve</span></th>
+                  <th scope="col"><span class="sr-only">Remove</span></th>
+                </tr>
+              </thead>
+              <tbody id="regimenBody"></tbody>
+            </table>
+          </div>
+
+          <div class="button-row">
+            <button class="button button-primary" type="button" id="addDose">Add dose</button>
+            <button class="button" type="button" id="loadExample">Load example</button>
+            <button class="button" type="button" id="clearRegimen">Clear regimen</button>
+          </div>
+
+          <fieldset class="settings">
+            <legend>Model settings</legend>
+            <div class="field">
+              <label for="onThreshold">Target-zone threshold <span>(relative units)</span></label>
+              <input type="number" id="onThreshold" min="0" max="20000" step="5" inputmode="decimal" placeholder="e.g. 50">
+            </div>
+            <div class="field">
+              <label for="dyskinesiaThreshold">High-exposure threshold <span>(relative units)</span></label>
+              <input type="number" id="dyskinesiaThreshold" min="0" max="20000" step="5" inputmode="decimal" placeholder="e.g. 120">
+            </div>
+            <div class="field field-small">
+              <label for="days">Days represented</label>
+              <input type="number" id="days" min="1" max="7" step="1" inputmode="numeric" value="2">
+            </div>
+            <div class="field field-wide">
+              <label for="comt">COMT adjustment</label>
+              <select id="comt">
+                <option value="none">None</option>
+                <option value="ent">Entacapone with each levodopa dose</option>
+                <option value="opi">Opicapone once daily</option>
+                <option value="tol">Tolcapone three times daily</option>
+              </select>
+            </div>
+          </fieldset>
+          <p class="form-message" id="formMessage" role="alert"></p>
+          <p class="hint">“Days represented” adds prior-day carryover for longer-half-life medications. Steady-state rows are displayed as constant pseudo-exposure. Thresholds are optional and user-defined; they are not validated clinical On/Off or dyskinesia cutoffs.</p>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="chartTitle">
+        <div class="card-header">
+          <div>
+            <h2 id="chartTitle">Modeled exposure over 24 hours</h2>
+            <p>Relative normalized exposure index—not a measured plasma concentration or direct prediction of clinical effect.</p>
+          </div>
+        </div>
+        <div class="readout" aria-live="polite" aria-atomic="true">
+          <div><span class="readout-label">Time</span><strong id="readoutTime">—</strong></div>
+          <div><span class="readout-label">Relative exposure</span><strong id="readoutValue">—</strong></div>
+          <div><span class="readout-label">User-defined zone</span><strong class="zone-readout" id="readoutZone">Unclassified</strong></div>
+        </div>
+        <p class="contributions" id="readoutContributions"></p>
+        <div id="chartBox" class="chart-box"></div>
+        <div class="chart-control">
+          <label for="timeSlider">Explore time: <output id="sliderTime" for="timeSlider">00:00</output></label>
+          <input type="range" id="timeSlider" min="0" max="1439" step="1" value="0">
+          <p class="hint">Use the slider or Left/Right arrow keys for minute-by-minute values. Page Up/Down moves by one hour.</p>
+        </div>
+        <div class="legend" id="legend" role="group" aria-label="Show or hide medication curves"></div>
+      </section>
+
+      <section class="card" aria-labelledby="statisticsTitle">
+        <div class="card-header"><h2 id="statisticsTitle">Summary</h2></div>
+        <div class="card-body">
+          <div class="stats" id="statistics"></div>
+          <p class="hint">LEDD is a research comparison measure. The remaining values come from this simplified exposure model and should not guide medication changes.</p>
+        </div>
+      </section>
+
+      <details>
+        <summary>Save or load a regimen</summary>
+        <div class="details-body">
+          <p>Exports include a schema version and model version so saved regimens can be interpreted after the model changes.</p>
+          <label class="sr-only" for="regimenJson">Regimen JSON</label>
+          <textarea id="regimenJson" spellcheck="false" placeholder="Export a regimen or paste regimen JSON here"></textarea>
+          <div class="button-row">
+            <button class="button" type="button" id="exportJson">Prepare JSON</button>
+            <button class="button" type="button" id="copyJson">Copy JSON</button>
+            <button class="button" type="button" id="downloadJson">Download JSON</button>
+            <button class="button button-primary" type="button" id="importJson">Load JSON</button>
+          </div>
+          <p class="form-message" id="jsonMessage" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Medication parameters and sources</summary>
+        <div class="details-body">
+          <p>LEDD conversion and exposure-curve shape are stored separately. Component curves are normalized so their integrated area matches the declared exposure factor. “Consensus proposal” does not mean clinically validated equivalence for an individual patient.</p>
+          <div class="table-scroll" role="region" aria-label="Medication parameter table" tabindex="0">
+            <table class="parameter-table">
+              <thead>
+                <tr>
+                  <th scope="col">Medication</th>
+                  <th scope="col">LEDD formula</th>
+                  <th scope="col">Exposure model</th>
+                  <th scope="col">Evidence/source</th>
+                </tr>
+              </thead>
+              <tbody id="parameterBody"></tbody>
+            </table>
+          </div>
+          <p><strong>Not included:</strong> medications without a suitable exposure representation remain outside the graph even when a research LED proposal exists. Investigational or legacy products are labeled as such.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Model assumptions and limitations</summary>
+        <div class="details-body prose">
+          <p><strong>Exposure shapes.</strong> Oral and injected doses use a simplified linear rise to a peak followed by exponential elimination. Extended-release products use multiple components. Infusions approach a modeled steady level and decay after stopping. Component areas are normalized to a declared exposure factor.</p>
+          <p><strong>Not literal cross-drug plasma concentrations.</strong> Dopamine agonists, MAO-B inhibitors, amantadine, safinamide, and istradefylline do not become levodopa. Their curves are pseudo-exposure representations used only to make a regimen easier to inspect.</p>
+          <p><strong>COMT adjustment.</strong> LEDD uses the 2023 consensus factors. Exposure multipliers use approximate label-reported levodopa AUC effects: entacapone 1.35×, opicapone 1.78×, and tolcapone 2×. These simplified multipliers do not reproduce individual dose timing, food effects, or variability.</p>
+          <p><strong>Important omissions.</strong> Absorption lag, protein and meal effects, gastroparesis, renal/hepatic function, endogenous dopamine, drug interactions, rescue-dose context, and person-to-person variability are not modeled. Pharmacokinetics is not pharmacodynamics.</p>
+          <p><strong>Primary conversion reference.</strong> Jost ST et al. <a href="https://movementdisorders.onlinelibrary.wiley.com/doi/10.1002/mds.29410" target="_blank" rel="noopener noreferrer">Levodopa Dose Equivalency in Parkinson’s Disease: Updated Systematic Review and Proposals</a>. Movement Disorders. 2023.</p>
+        </div>
+      </details>
+    </main>
+
+    <footer class="site-footer">
+      <p>Population-level educational model. Do not start, stop, or change medication based on this tool. Discuss medication decisions with a qualified clinician.</p>
+      <p>This site runs entirely in your browser and does not transmit regimen data.</p>
+    </footer>
   </div>
-</section>
-
-<section class="card" id="chartCard">
-  <div class="chead"><h2>Estimated plasma levels over 24 h</h2><span class="note">Hover or drag on the graph to read minute-by-minute values. Units: LED mg (100 = peak of 100 mg IR levodopa/carbidopa).</span></div>
-  <div class="readout">
-    <div><span class="lbl">Time</span><span class="big" id="roTime">–</span></div>
-    <div><span class="lbl">Total (LED mg)</span><span class="big" id="roVal">–</span></div>
-    <div class="state" id="roState"></div>
-  </div>
-  <div class="contrib" id="roContrib"></div>
-  <div id="chartbox"></div>
-  <div class="legend" id="legend"></div>
-</section>
-
-<section class="card">
-  <div class="chead"><h2>Statistics</h2></div>
-  <div class="cbody"><div class="stats" id="statsBox"></div></div>
-</section>
-
-<details>
-  <summary>Save / load regimen</summary>
-  <div class="dbody">
-    <p>Export copies the current regimen as JSON — save it anywhere. Paste it back and press Load to restore.</p>
-    <textarea id="jsonio" spellcheck="false" aria-label="Regimen JSON"></textarea>
-    <div class="btnrow"><button id="btnExport">Export current regimen</button><button id="btnImport">Load from JSON above</button></div>
-  </div>
-</details>
-
-<details>
-  <summary>Pharmacokinetic parameters and sources</summary>
-  <div class="dbody">
-    <p>CF = levodopa-equivalent dose conversion factor (LED per mg). C<sub>max</sub> is per mg of drug, relative to the peak of 1 mg IR levodopa/carbidopa. Values marked &asymp; are estimates fitted from prescribing information so the area under the curve matches the LED conversion factor.</p>
-    <div style="overflow-x:auto;"><table class="pk" id="pkTable"></table></div>
-    <p style="margin-top:8px;"><b>Handled via the COMT setting, not as separate curves:</b> entacapone (Comtan), opicapone (Ongentys), tolcapone (Tasmar). <b>Not modeled</b> (no accepted LED / non-dopaminergic mechanism): trihexyphenidyl, benztropine and other anticholinergics; pimavanserin (Nuplazid); zonisamide; sublingual apomorphine film (Kynmobi, withdrawn from the US market).</p>
-  </div>
-</details>
-
-<details>
-  <summary>Model, assumptions and limitations</summary>
-  <div class="dbody">
-    <p><b>Model.</b> Each dose is described by C<sub>max</sub>, T<sub>max</sub> and T<sub>&frac12;</sub>. Plasma levels rise linearly from the time of the dose to C<sub>max</sub> at T<sub>max</sub>, then halve every T<sub>&frac12;</sub>. Extended-release capsules (Rytary, Crexont) are modeled as an immediate-release fraction plus an extended-release fraction. Infusions (Duopa, Vyalev, Onapgo) rise exponentially toward a steady-state level set by the infusion rate and decay after the pump stops. Non-levodopa drugs are assigned pseudo-levodopa levels: C<sub>max</sub> is chosen so their AUC equals that of their levodopa-equivalent dose. Doses are assumed independent and additive.</p>
-    <p><b>Assumptions carried from the original tool.</b> Agonists don&rsquo;t literally become levodopa, and MAO-B inhibitors work by prolonging dopamine&rsquo;s life rather than adding to it — treating them as constant additive LED is a deliberate sleight of hand for interpretability. Published PK parameters vary widely between studies, come from small samples, and mix healthy volunteers with PD patients, single doses with steady state, fed with fasted. Absorption lag, protein interference, gastroparesis, endogenous dopamine, and person-to-person variation are ignored. Pharmacokinetics (drug levels) is a proxy for what actually matters, pharmacodynamics (clinical effect).</p>
-    <p><b>Additions in this version.</b> Rytary, Crexont, Inbrija, pramipexole ER, amantadine ER (Gocovri), bromocriptine, selegiline/Zelapar, safinamide, istradefylline, and the three continuous-delivery systems (Duopa, Vyalev, Onapgo) were parameterized from their prescribing information and the LED literature (Tomlinson 2010; Jost/MDS 2023 update) using the same AUC-matching logic. These are rougher estimates than the original tool&rsquo;s referenced values — the istradefylline LED in particular is not established.</p>
-    <p><b>References.</b> Turner J, <a href="https://www.parkinsonsmeasurement.org/toolBox/pharmacokinetics.htm" target="_blank" rel="noopener">parkinsonsmeasurement.org pharmacokinetics tool</a> (2020) &middot; Kuoppam&auml;ki M et al., Eur J Clin Pharmacol 2009 &middot; Tomlinson CL et al., Mov Disord 2010 (LED systematic review) &middot; Jost ST et al., Mov Disord 2023 (updated LED conversion) &middot; Sam E et al., Eur J Drug Metab Pharmacokinet 1995 (apomorphine) &middot; Cawello W et al., Clin Drug Investig 2014 (rotigotine) &middot; Morrison D et al., PLoS ONE 2007 (amantadine) &middot; FDA prescribing information for Rytary, Crexont, Inbrija, Gocovri, Duopa, Vyalev, Onapgo, Requip XL.</p>
-  </div>
-</details>
-
-<footer class="site">
-  Model and core parameters adapted from John Turner&rsquo;s Parkinson&rsquo;s Measurement toolbox. All outputs are population-level estimates for education and regimen visualization — they are not medical advice, and no medication change should be based on this graph.
-</footer>
-
-</div>
-
-<script>
-"use strict";
-/* ---------------- Pharmacokinetic data ---------------- */
-var LN2 = Math.log(2);
-var LD_AUC = 60/2 + 81/LN2;            // AUC of 1 mg IR levodopa in this model ≈ 146.9 mg·min
-var CONST_K = LD_AUC/1440;             // constant level per LED mg spread over 24 h ≈ 0.102
-
-/* comps: {f: fraction of dose, cmax: per-mg rel LD, tmax: min, thalf: min}
-   steady:k → constant level = dose × k (patches, MAO-B: modeled at steady state)
-   infusion:{thalf} → user supplies total mg + duration
-   ld:true → levodopa-containing (COMT setting applies unless comtIncluded) */
-var DRUGS = [
- {id:"sinemet",   g:"Levodopa preparations", name:"Sinemet — levodopa/carbidopa IR", cf:1, ld:true,  def:100,
-  comps:[{f:1,cmax:1,tmax:60,thalf:81}], model:"Tmax 60′ · T½ 81′", src:"Kuoppamäki 2009; Turner"},
- {id:"madopar",   g:"Levodopa preparations", name:"Madopar — levodopa/benserazide IR", cf:1, ld:true, def:100,
-  comps:[{f:1,cmax:1,tmax:60,thalf:81}], model:"Tmax 60′ · T½ 81′", src:"Korten 1975; Turner"},
- {id:"sinemetcr", g:"Levodopa preparations", name:"Sinemet CR — levodopa/carbidopa CR", cf:0.7, ld:true, def:100,
-  comps:[{f:1,cmax:0.4,tmax:120,thalf:137}], model:"Tmax 120′ · T½ 137′ · F≈70%", src:"emc SPC 2015; Turner"},
- {id:"madoparcr", g:"Levodopa preparations", name:"Madopar HBS / CR", cf:0.7, ld:true, def:100,
-  comps:[{f:1,cmax:0.4,tmax:120,thalf:137}], model:"as levodopa CR", src:"as levodopa CR"},
- {id:"stalevo",   g:"Levodopa preparations", name:"Stalevo — levodopa/carbidopa/entacapone", cf:1.33, ld:true, comtIncluded:true, def:100,
-  comps:[{f:1,cmax:1.08,tmax:90,thalf:117}], model:"Tmax 90′ · T½ 117′ · Cmax ×1.08", src:"Kuoppamäki 2009"},
- {id:"rytary",    g:"Levodopa preparations", name:"Rytary — carbidopa/levodopa ER capsules", cf:0.5, est:true, ld:true, def:245,
-  comps:[{f:0.25,cmax:0.5,tmax:60,thalf:81},{f:0.75,cmax:0.209,tmax:270,thalf:150}],
-  model:"IR 25% (60′/81′) + ER 75% (270′/150′)", src:"≈ Rytary PI 2015; LED ×0.5 (Jost 2023)"},
- {id:"crexont",   g:"Levodopa preparations", name:"Crexont — carbidopa/levodopa ER (IPX-203)", cf:0.5, est:true, ld:true, def:140,
-  comps:[{f:0.30,cmax:0.6,tmax:60,thalf:81},{f:0.70,cmax:0.164,tmax:300,thalf:180}],
-  model:"IR 30% (60′/81′) + ER 70% (300′/180′)", src:"≈ Crexont PI 2024 / RISE-PD; LED assumed ×0.5"},
- {id:"inbrija",   g:"Levodopa preparations", name:"Inbrija — levodopa inhalation powder", cf:1, est:true, ld:true, def:84,
-  comps:[{f:1,cmax:0.686,tmax:30,thalf:138}], model:"Tmax 30′ · T½ 138′", src:"≈ Inbrija PI; AUC-matched"},
- {id:"duopa",     g:"Levodopa infusions", name:"Duopa / Duodopa — LCIG intestinal infusion", cf:1, ld:true, infusion:{thalf:81}, def:1000, defDur:960,
-  model:"continuous · T½ 81′", src:"Duopa PI; IR kinetics"},
- {id:"vyalev",    g:"Levodopa infusions", name:"Vyalev — foslevodopa/foscarbidopa SC infusion", cf:1, ld:true, infusion:{thalf:81}, def:1000, defDur:1440,
-  model:"continuous 24 h · T½ 81′", src:"Vyalev PI; IR kinetics"},
- {id:"onapgo",    g:"Levodopa infusions", name:"Onapgo — apomorphine SC infusion", cf:10, infusion:{thalf:27}, def:60, defDur:960,
-  model:"continuous · T½ 27′", src:"Onapgo PI; Sam 1995"},
- {id:"aposc",     g:"Dopamine agonists", name:"Apomorphine SC injection (Apokyn)", cf:10, def:4,
-  comps:[{f:1,cmax:30.62,tmax:18,thalf:27}], model:"Tmax 18′ · T½ 27′", src:"Sam 1995; Turner"},
- {id:"apoin",     g:"Dopamine agonists", name:"Apomorphine intranasal", cf:7.5, def:4,
-  comps:[{f:1,cmax:19.59,tmax:23,thalf:31}], model:"Tmax 23′ · T½ 31′ · F 45% of SC", src:"Sam 1995; Turner"},
- {id:"prami",     g:"Dopamine agonists", name:"Pramipexole IR (Mirapex / Mirapexin)", cf:100, def:0.5,
-  comps:[{f:1,cmax:19.92,tmax:120,thalf:600}], model:"Tmax 120′ · T½ 600′", src:"MHRA UKPAR 2012; Turner"},
- {id:"pramier",   g:"Dopamine agonists", name:"Pramipexole ER (Mirapex ER)", cf:100, est:true, def:1.5,
-  comps:[{f:1,cmax:14.05,tmax:360,thalf:600}], model:"Tmax 360′ · T½ 600′", src:"≈ ER PI; AUC-matched"},
- {id:"ropin",     g:"Dopamine agonists", name:"Ropinirole IR (Requip)", cf:20, def:2,
-  comps:[{f:1,cmax:5.59,tmax:90,thalf:360}], model:"Tmax 90′ · T½ 360′", src:"MHRA; Turner"},
- {id:"ropinxl",   g:"Dopamine agonists", name:"Ropinirole XL / CR (Requip XL)", cf:20, def:8,
-  comps:[{f:1,cmax:4.34,tmax:480,thalf:360}], model:"Tmax 480′ · T½ 360′", src:"Requip XL PI; Turner"},
- {id:"rotig",     g:"Dopamine agonists", name:"Rotigotine patch (Neupro)", cf:30, steady:3.215, def:6,
-  model:"constant (steady state)", src:"Cawello 2014; Turner"},
- {id:"bromo",     g:"Dopamine agonists", name:"Bromocriptine (Parlodel)", cf:10, est:true, def:2.5,
-  comps:[{f:1,cmax:2.60,tmax:90,thalf:360}], model:"Tmax 90′ · T½ 360′", src:"LED ×10 (Tomlinson 2010); AUC-matched"},
- {id:"rasag",     g:"MAO-B inhibitors", name:"Rasagiline (Azilect)", cf:100, steady:10.72, def:1,
-  model:"constant (steady state)", src:"Turner; LED ×100"},
- {id:"seleg",     g:"MAO-B inhibitors", name:"Selegiline oral (Eldepryl)", cf:10, est:true, steady:1.02, def:10,
-  model:"constant (steady state)", src:"LED ×10 (Tomlinson 2010)"},
- {id:"zelapar",   g:"MAO-B inhibitors", name:"Selegiline ODT (Zelapar)", cf:80, est:true, steady:8.16, def:1.25,
-  model:"constant (steady state)", src:"LED ×80 (Tomlinson 2010)"},
- {id:"safin",     g:"MAO-B inhibitors", name:"Safinamide (Xadago)", cf:1, est:true, steady:0.102, def:100,
-  model:"constant (steady state)", src:"LED: 100 mg = 100 (Jost 2023)"},
- {id:"amant",     g:"Other adjuncts", name:"Amantadine IR", cf:1, def:100,
-  comps:[{f:1,cmax:0.169,tmax:126,thalf:847}], model:"Tmax 126′ · T½ 847′", src:"Morrison 2007; Turner"},
- {id:"gocovri",   g:"Other adjuncts", name:"Amantadine ER (Gocovri / Osmolex ER)", cf:1, est:true, def:274,
-  comps:[{f:1,cmax:0.0928,tmax:720,thalf:847}], model:"Tmax 720′ · T½ 847′", src:"≈ Gocovri PI; AUC-matched"},
- {id:"istrad",    g:"Other adjuncts", name:"Istradefylline (Nourianz)", cf:2.5, est:true, steady:0.255, def:40,
-  model:"constant (steady state)", src:"LED not established — rough approximation"}
-];
-var DRUG_BY_ID = {};
-DRUGS.forEach(function(d){ DRUG_BY_ID[d.id]=d; });
-
-var PALETTE = ["#0072B2","#D55E00","#009E73","#CC79A7","#E69F00","#56B4E9","#8C510A","#5E3C99","#117733","#882255"];
-
-/* ---------------- State ---------------- */
-var state = {
-  doses: [],           // {t:"07:00", drug:"sinemet", dose:100, dur:960, hidden:false}
-  onThr: null, dysThr: null, days: 2, comt: "none"
-};
-var computed = null;   // {series:[Float64Array], total:Float64Array, yMax}
-var cursorMin = null;
-
-/* ---------------- Helpers ---------------- */
-function $(id){ return document.getElementById(id); }
-function toMin(t){ if(!t) return 0; var p=t.split(":"); return (+p[0])*60 + (+p[1]||0); }
-function fmtClock(m){ m=((m%1440)+1440)%1440; var h=Math.floor(m/60), mm=Math.round(m%60); if(mm===60){h++;mm=0;} return String(h).padStart(2,"0")+":"+String(mm).padStart(2,"0"); }
-function fmtDur(m){ var h=Math.floor(m/60), mm=Math.round(m%60); return (h? h+" h ":"")+(mm? mm+" min":(h? "":"0 min")); }
-function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
-function r1(x){ return Math.round(x*10)/10; }
-
-/* COMT adjustment of a component for levodopa-containing drugs */
-function adjComp(c, drug){
-  if(state.comt==="none" || !drug.ld || drug.comtIncluded) return c;
-  if(c.thalf<=100) return {f:c.f, cmax:c.cmax*1.08, tmax:90, thalf:117};
-  return {f:c.f, cmax:c.cmax*1.08, tmax:c.tmax, thalf:c.thalf*1.44};
-}
-
-/* Level contributed by one regimen row at minute t of "today" */
-function contrib(dose, t){
-  var drug = DRUG_BY_ID[dose.drug];
-  if(!drug || !(dose.dose>0)) return 0;
-  if(drug.steady) return dose.dose * drug.steady;
-
-  var days = Math.min(7, Math.max(1, state.days||1));
-  var t0 = toMin(dose.t), lv = 0, d, x;
-
-  if(drug.infusion){
-    var dur = Math.min(1440, Math.max(1, dose.dur||1440));
-    var th = drug.infusion.thalf * ((state.comt!=="none" && drug.ld) ? 1.44 : 1);
-    var ss = (dose.dose/dur) * drug.cf * LD_AUC * ((state.comt!=="none" && drug.ld) ? 1.08 : 1);
-    for(d=0; d<days; d++){
-      x = (t - t0) + 1440*d;
-      if(x < 0) continue;
-      if(x <= dur) lv += ss*(1 - Math.pow(0.5, x/th));
-      else lv += ss*(1 - Math.pow(0.5, dur/th))*Math.pow(0.5, (x-dur)/th);
-    }
-    return lv;
-  }
-
-  for(d=0; d<days; d++){
-    x = (t - t0) + 1440*d;
-    if(x < 0) continue;
-    for(var i=0;i<drug.comps.length;i++){
-      var c = adjComp(drug.comps[i], drug);
-      var peak = dose.dose * c.f * c.cmax;
-      if(c.tmax>0 && x <= c.tmax) lv += peak * x/c.tmax;
-      else lv += peak * Math.pow(0.5, (x - Math.max(c.tmax,0))/c.thalf);
-    }
-  }
-  return lv;
-}
-
-/* ---------------- Compute ---------------- */
-function recompute(){
-  var N = 1441;
-  var series = state.doses.map(function(){ return new Float64Array(N); });
-  var total = new Float64Array(N);
-  for(var t=0;t<N;t++){
-    var sum=0;
-    for(var j=0;j<state.doses.length;j++){
-      var v = contrib(state.doses[j], t);
-      series[j][t]=v;
-      if(!state.doses[j].hidden) sum+=v;
-    }
-    total[t]=sum;
-  }
-  var max=0, maxT=0, min=Infinity, minT=0;
-  for(t=0;t<1440;t++){
-    if(total[t]>max){max=total[t];maxT=t;}
-    if(total[t]<min){min=total[t];minT=t;}
-  }
-  computed = {series:series, total:total, max:max, maxT:maxT, min:min, minT:minT};
-  if(cursorMin===null) cursorMin = maxT;
-  drawChart();
-  drawLegend();
-  drawStats();
-  updateReadout(cursorMin);
-  updateRowLED();
-}
-
-/* ---------------- Chart ---------------- */
-var CH = {W:980,H:470,L:58,R:966,T:16,B:352,stripY:366,stripH:16,lblY:412};
-function xPx(m){ return CH.L + (m/1440)*(CH.R-CH.L); }
-function niceStep(range){
-  var steps=[1,2,5,10,20,25,50,100,200,250,500,1000];
-  for(var i=0;i<steps.length;i++){ if(range/steps[i]<=7) return steps[i]; }
-  return 2000;
-}
-function classify(v){
-  var on=state.onThr, dy=state.dysThr;
-  if(dy>0 && v>=dy) return 2;
-  if(on>0 && v>=on) return 1;
-  return 0;
-}
-function drawChart(){
-  if(!computed) return;
-  var yTop = Math.max(computed.max, state.dysThr||0, state.onThr||0, 10)*1.08;
-  var step = niceStep(yTop);
-  yTop = Math.ceil(yTop/step)*step;
-  var yPx = function(v){ return CH.B - (v/yTop)*(CH.B-CH.T); };
-  var s = [];
-  s.push('<svg viewBox="0 0 '+CH.W+' '+CH.H+'" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Levodopa equivalent plasma levels over 24 hours" id="pkSvg">');
-  s.push('<rect x="0" y="0" width="'+CH.W+'" height="'+CH.H+'" fill="#ffffff"/>');
-
-  /* threshold bands */
-  if(state.onThr>0){
-    s.push('<rect x="'+CH.L+'" y="'+yPx(state.onThr)+'" width="'+(CH.R-CH.L)+'" height="'+(CH.B-yPx(state.onThr))+'" fill="#000000" opacity="0.045"/>');
-  }
-  if(state.dysThr>0){
-    s.push('<rect x="'+CH.L+'" y="'+CH.T+'" width="'+(CH.R-CH.L)+'" height="'+Math.max(0,yPx(state.dysThr)-CH.T)+'" fill="#000000" opacity="0.07"/>');
-  }
-
-  /* grid + y ticks */
-  for(var v=0; v<=yTop+0.001; v+=step){
-    var y=yPx(v);
-    s.push('<line x1="'+CH.L+'" y1="'+y+'" x2="'+CH.R+'" y2="'+y+'" stroke="#dcdcdc" stroke-width="1"/>');
-    s.push('<text x="'+(CH.L-8)+'" y="'+(y+4)+'" text-anchor="end" font-size="12" fill="#000">'+v+'</text>');
-  }
-  /* x ticks every 2 h */
-  for(var h=0; h<=24; h+=2){
-    var x=xPx(h*60);
-    s.push('<line x1="'+x+'" y1="'+CH.T+'" x2="'+x+'" y2="'+CH.B+'" stroke="#ececec" stroke-width="1"/>');
-    s.push('<line x1="'+x+'" y1="'+CH.B+'" x2="'+x+'" y2="'+(CH.B+5)+'" stroke="#000" stroke-width="1"/>');
-    s.push('<text x="'+x+'" y="'+CH.lblY+'" text-anchor="middle" font-size="12" fill="#000">'+String(h).padStart(2,"0")+':00</text>');
-  }
-  /* axes */
-  s.push('<line x1="'+CH.L+'" y1="'+CH.T+'" x2="'+CH.L+'" y2="'+CH.B+'" stroke="#000" stroke-width="1.4"/>');
-  s.push('<line x1="'+CH.L+'" y1="'+CH.B+'" x2="'+CH.R+'" y2="'+CH.B+'" stroke="#000" stroke-width="1.4"/>');
-  s.push('<text transform="translate(16,'+((CH.T+CH.B)/2)+') rotate(-90)" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#000">LED (mg)</text>');
-
-  /* threshold lines + labels */
-  if(state.onThr>0){
-    s.push('<line x1="'+CH.L+'" y1="'+yPx(state.onThr)+'" x2="'+CH.R+'" y2="'+yPx(state.onThr)+'" stroke="#000" stroke-width="1.2" stroke-dasharray="6 4"/>');
-    s.push('<text x="'+(CH.R-4)+'" y="'+(yPx(state.onThr)-5)+'" text-anchor="end" font-size="11.5" font-weight="bold" fill="#000">&ldquo;On&rdquo; threshold</text>');
-  }
-  if(state.dysThr>0){
-    s.push('<line x1="'+CH.L+'" y1="'+yPx(state.dysThr)+'" x2="'+CH.R+'" y2="'+yPx(state.dysThr)+'" stroke="#000" stroke-width="1.2" stroke-dasharray="2 3"/>');
-    s.push('<text x="'+(CH.R-4)+'" y="'+(yPx(state.dysThr)-5)+'" text-anchor="end" font-size="11.5" font-weight="bold" fill="#000">Dyskinesia threshold</text>');
-  }
-
-  /* per-dose curves */
-  for(var j=0;j<state.doses.length;j++){
-    if(state.doses[j].hidden) continue;
-    var col = PALETTE[j % PALETTE.length];
-    var p=[];
-    for(var t=0;t<=1440;t+=2){
-      p.push((t===0?"M":"L")+xPx(t).toFixed(1)+" "+yPx(computed.series[j][t]).toFixed(1));
-    }
-    s.push('<path d="'+p.join(" ")+'" fill="none" stroke="'+col+'" stroke-width="1.4" opacity="0.9"/>');
-  }
-  /* total curve */
-  var pt=[];
-  for(t=0;t<=1440;t+=2){
-    pt.push((t===0?"M":"L")+xPx(t).toFixed(1)+" "+yPx(computed.total[t]).toFixed(1));
-  }
-  s.push('<path d="'+pt.join(" ")+'" fill="none" stroke="#000" stroke-width="2.6"/>');
-
-  /* On/off day strip */
-  if(state.onThr>0){
-    var runs=[], cur=classify(computed.total[0]), start=0;
-    for(t=1;t<1440;t++){
-      var c2=classify(computed.total[t]);
-      if(c2!==cur){ runs.push([start,t,cur]); cur=c2; start=t; }
-    }
-    runs.push([start,1440,cur]);
-    var fills=["#bfbfbf","#ffffff","#4d4d4d"];
-    for(var k=0;k<runs.length;k++){
-      var rn=runs[k];
-      s.push('<rect x="'+xPx(rn[0]).toFixed(1)+'" y="'+CH.stripY+'" width="'+(xPx(rn[1])-xPx(rn[0])).toFixed(1)+'" height="'+CH.stripH+'" fill="'+fills[rn[2]]+'" stroke="none"/>');
-    }
-    s.push('<rect x="'+CH.L+'" y="'+CH.stripY+'" width="'+(CH.R-CH.L)+'" height="'+CH.stripH+'" fill="none" stroke="#000" stroke-width="1"/>');
-    s.push('<text x="'+(CH.L-8)+'" y="'+(CH.stripY+12)+'" text-anchor="end" font-size="11" font-weight="bold" fill="#000">Day strip</text>');
-    s.push('<g font-size="11" fill="#000">'+
-      '<rect x="'+CH.L+'" y="'+(CH.H-18)+'" width="11" height="11" fill="#bfbfbf" stroke="#000" stroke-width="0.7"/><text x="'+(CH.L+16)+'" y="'+(CH.H-9)+'">Off</text>'+
-      '<rect x="'+(CH.L+58)+'" y="'+(CH.H-18)+'" width="11" height="11" fill="#ffffff" stroke="#000" stroke-width="0.7"/><text x="'+(CH.L+74)+'" y="'+(CH.H-9)+'">On</text>'+
-      '<rect x="'+(CH.L+116)+'" y="'+(CH.H-18)+'" width="11" height="11" fill="#4d4d4d" stroke="#000" stroke-width="0.7"/><text x="'+(CH.L+132)+'" y="'+(CH.H-9)+'">Above dyskinesia threshold</text></g>');
-  }
-
-  /* crosshair */
-  var cx = xPx(Math.min(1439, Math.max(0, cursorMin||0)));
-  s.push('<line id="xhLine" x1="'+cx+'" y1="'+CH.T+'" x2="'+cx+'" y2="'+CH.B+'" stroke="#000" stroke-width="1" stroke-dasharray="3 3"/>');
-  s.push('<circle id="xhDot" cx="'+cx+'" cy="'+yPx(computed.total[Math.round(cursorMin||0)])+'" r="4.5" fill="#000"/>');
-  s.push('</svg>');
-  $("chartbox").innerHTML = s.join("");
-  CH.yTop = yTop;
-}
-
-function updateReadout(m){
-  if(!computed) return;
-  m = Math.round(Math.min(1439, Math.max(0, m)));
-  cursorMin = m;
-  var v = computed.total[m];
-  $("roTime").textContent = fmtClock(m);
-  $("roVal").textContent = r1(v);
-  var st = "";
-  if(state.onThr>0){
-    var c = classify(v);
-    st = c===2 ? "Above dyskinesia threshold" : (c===1 ? "\u201cOn\u201d" : "\u201cOff\u201d");
-  }
-  $("roState").textContent = st;
-  var parts = state.doses.map(function(d,j){
-      return {j:j, v:computed.series[j][m], d:d};
-    }).filter(function(p){ return p.v>0.5 && !p.d.hidden; })
-    .sort(function(a,b){ return b.v-a.v; }).slice(0,4)
-    .map(function(p){
-      var drug = DRUG_BY_ID[p.d.drug];
-      var nm = drug ? drug.name.split(" — ")[0].split(" (")[0] : "?";
-      return esc(nm)+" "+fmtClock(toMin(p.d.t))+": "+r1(p.v);
-    });
-  $("roContrib").textContent = parts.length ? ("Contributions — " + parts.join("  ·  ")) : "";
-  /* move crosshair without full redraw */
-  var line=$("xhLine"), dot=$("xhDot");
-  if(line){
-    var x = xPx(m);
-    line.setAttribute("x1",x); line.setAttribute("x2",x);
-    if(dot){ dot.setAttribute("cx",x); dot.setAttribute("cy", CH.B - (v/CH.yTop)*(CH.B-CH.T)); }
-  }
-}
-
-/* pointer interaction */
-(function(){
-  var box = $("chartbox");
-  function handle(ev){
-    var svg = box.querySelector("svg");
-    if(!svg) return;
-    var rect = svg.getBoundingClientRect();
-    var scale = rect.width / CH.W;
-    var m = ((ev.clientX - rect.left)/scale - CH.L)/(CH.R-CH.L)*1440;
-    if(m>=-30 && m<=1470) updateReadout(m);
-  }
-  box.addEventListener("pointermove", handle);
-  box.addEventListener("pointerdown", handle);
-})();
-
-/* ---------------- Legend ---------------- */
-function drawLegend(){
-  var s=[];
-  s.push('<span class="li total"><span class="swatch" style="background:#000"></span><b>Total</b></span>');
-  state.doses.forEach(function(d,j){
-    var drug = DRUG_BY_ID[d.drug];
-    var nm = drug ? drug.name.split(" — ")[0] : "?";
-    var extra = drug && drug.steady ? "" : " " + fmtClock(toMin(d.t));
-    s.push('<span class="li'+(d.hidden?' off':'')+'" data-j="'+j+'" role="button" tabindex="0" title="Show/hide this dose">'+
-      '<span class="swatch" style="background:'+PALETTE[j%PALETTE.length]+'"></span>'+esc(nm)+extra+' · '+(d.dose||0)+' mg</span>');
-  });
-  var lg=$("legend");
-  lg.innerHTML=s.join("");
-  lg.querySelectorAll(".li[data-j]").forEach(function(el){
-    function tog(){ var j=+el.getAttribute("data-j"); state.doses[j].hidden=!state.doses[j].hidden; recompute(); }
-    el.addEventListener("click",tog);
-    el.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){e.preventDefault();tog();} });
-  });
-}
-
-/* ---------------- Stats ---------------- */
-function drawStats(){
-  var box=$("statsBox");
-  if(!computed || !state.doses.length){ box.innerHTML='<div class="stat"><span class="v">–</span><span class="k">Add doses to begin</span></div>'; return; }
-  var ledd=0;
-  state.doses.forEach(function(d){ var dr=DRUG_BY_ID[d.drug]; if(dr && d.dose>0) ledd += d.dose*dr.cf; });
-  var cards=[];
-  cards.push({v:Math.round(ledd), k:"LEDD (mg/day)", s:"sum of dose × CF"});
-  cards.push({v:r1(computed.max), k:"Peak (LED mg)", s:"at "+fmtClock(computed.maxT)});
-  cards.push({v:r1(computed.min), k:"Trough (LED mg)", s:"at "+fmtClock(computed.minT)});
-  var mean=0; for(var t=0;t<1440;t++) mean+=computed.total[t]; mean/=1440;
-  cards.push({v:mean>0? r1((computed.max-computed.min)/mean):"–", k:"Fluctuation index", s:"(peak − trough) / mean"});
-  if(state.onThr>0){
-    var on=0,dy=0,offLongest=0,offCur=0;
-    for(t=0;t<1440;t++){
-      var c=classify(computed.total[t]);
-      if(c>=1) on++;
-      if(c===2) dy++;
-      if(c===0){ offCur++; if(offCur>offLongest) offLongest=offCur; } else offCur=0;
-    }
-    cards.push({v:fmtDur(on), k:"Time \u201con\u201d", s:Math.round(on/14.4)+"% of 24 h"});
-    cards.push({v:fmtDur(1440-on), k:"Time \u201coff\u201d", s:"longest stretch "+fmtDur(offLongest)});
-    if(state.dysThr>0) cards.push({v:fmtDur(dy), k:"Above dyskinesia thr.", s:Math.round(dy/14.4)+"% of 24 h"});
-  }
-  box.innerHTML = cards.map(function(c){
-    return '<div class="stat"><span class="v">'+c.v+'</span><br><span class="k">'+c.k+'</span><br><span class="s">'+(c.s||"")+'</span></div>';
-  }).join("");
-}
-
-/* ---------------- Regimen table ---------------- */
-function drugOptions(sel){
-  var groups={};
-  DRUGS.forEach(function(d){ (groups[d.g]=groups[d.g]||[]).push(d); });
-  var s=[];
-  Object.keys(groups).forEach(function(g){
-    s.push('<optgroup label="'+esc(g)+'">');
-    groups[g].forEach(function(d){
-      s.push('<option value="'+d.id+'"'+(d.id===sel?" selected":"")+'>'+esc(d.name)+'</option>');
-    });
-    s.push('</optgroup>');
-  });
-  return s.join("");
-}
-function renderRows(){
-  var b=$("regBody"), s=[];
-  state.doses.forEach(function(d,j){
-    var drug=DRUG_BY_ID[d.drug]||{};
-    s.push('<tr>'+
-      '<td><input type="time" value="'+esc(d.t)+'" data-j="'+j+'" data-f="t" aria-label="Time of dose"></td>'+
-      '<td class="drugcell"><select data-j="'+j+'" data-f="drug" aria-label="Drug">'+drugOptions(d.drug)+'</select></td>'+
-      '<td><input type="number" min="0" step="any" value="'+(d.dose!=null?d.dose:"")+'" data-j="'+j+'" data-f="dose" aria-label="Dose in mg"></td>'+
-      '<td>'+(drug.infusion? '<input type="number" min="10" max="1440" step="10" value="'+(d.dur||1440)+'" data-j="'+j+'" data-f="dur" aria-label="Infusion length in minutes">' : '<span style="color:#999">—</span>')+'</td>'+
-      '<td id="led-'+j+'" style="font-variant-numeric:tabular-nums">'+(drug.cf? r1((d.dose||0)*drug.cf):"")+'</td>'+
-      '<td><span class="chip" style="background:'+PALETTE[j%PALETTE.length]+'"></span></td>'+
-      '<td><button class="xdel" data-del="'+j+'" aria-label="Remove dose">✕</button></td>'+
-    '</tr>');
-  });
-  if(!state.doses.length) s.push('<tr><td colspan="7" style="color:#5f5f5f;padding:10px">No doses yet — add one or load the example regimen.</td></tr>');
-  b.innerHTML=s.join("");
-  b.querySelectorAll("input,select").forEach(function(el){
-    el.addEventListener("input", function(){
-      var j=+el.getAttribute("data-j"), f=el.getAttribute("data-f");
-      if(f==="dose"||f==="dur") state.doses[j][f]=parseFloat(el.value)||0;
-      else state.doses[j][f]=el.value;
-      if(f==="drug"){
-        var dr=DRUG_BY_ID[el.value];
-        state.doses[j].dose = dr? dr.def : 100;
-        if(dr && dr.infusion) state.doses[j].dur = dr.defDur||960;
-        renderRows();
-      }
-      recompute();
-    });
-  });
-  b.querySelectorAll("button[data-del]").forEach(function(el){
-    el.addEventListener("click", function(){
-      state.doses.splice(+el.getAttribute("data-del"),1);
-      renderRows(); recompute();
-    });
-  });
-}
-function updateRowLED(){
-  state.doses.forEach(function(d,j){
-    var cell=$("led-"+j), dr=DRUG_BY_ID[d.drug];
-    if(cell && dr) cell.textContent=r1((d.dose||0)*dr.cf);
-  });
-}
-
-/* ---------------- PK reference table ---------------- */
-function renderPkTable(){
-  var s=['<tr><th>Drug</th><th>CF (LED/mg)</th><th>Model</th><th>Source</th></tr>'];
-  DRUGS.forEach(function(d){
-    s.push('<tr><td>'+esc(d.name)+'</td><td>'+(d.est?"≈ ":"")+d.cf+'</td><td>'+esc(d.model)+'</td><td>'+esc(d.src)+'</td></tr>');
-  });
-  $("pkTable").innerHTML=s.join("");
-}
-
-/* ---------------- Buttons / settings ---------------- */
-$("btnAdd").addEventListener("click", function(){
-  state.doses.push({t:"08:00", drug:"sinemet", dose:100});
-  renderRows(); recompute();
-});
-$("btnClear").addEventListener("click", function(){
-  state.doses=[]; cursorMin=null; renderRows(); recompute();
-});
-$("btnExample").addEventListener("click", function(){
-  state.doses=[
-    {t:"07:00", drug:"sinemet", dose:100},
-    {t:"11:00", drug:"sinemet", dose:100},
-    {t:"15:00", drug:"sinemet", dose:100},
-    {t:"19:00", drug:"sinemet", dose:100},
-    {t:"07:00", drug:"rasag", dose:1},
-    {t:"21:00", drug:"ropinxl", dose:8}
-  ];
-  state.onThr=50; state.dysThr=120;
-  $("onThr").value=50; $("dysThr").value=120;
-  cursorMin=null;
-  renderRows(); recompute();
-});
-["onThr","dysThr"].forEach(function(id){
-  $(id).addEventListener("input", function(){
-    state[id]=parseFloat($(id).value)||null;
-    recompute();
-  });
-});
-$("days").addEventListener("input", function(){
-  state.days=Math.min(7,Math.max(1,parseInt($("days").value)||1));
-  recompute();
-});
-$("comt").addEventListener("input", function(){
-  state.comt=$("comt").value;
-  recompute();
-});
-$("btnExport").addEventListener("click", function(){
-  $("jsonio").value = JSON.stringify({
-    doses: state.doses.map(function(d){ return {t:d.t,drug:d.drug,dose:d.dose,dur:d.dur}; }),
-    onThr:state.onThr, dysThr:state.dysThr, days:state.days, comt:state.comt
-  }, null, 1);
-  $("jsonio").select();
-});
-$("btnImport").addEventListener("click", function(){
-  try{
-    var o=JSON.parse($("jsonio").value);
-    if(!o || !Array.isArray(o.doses)) throw new Error("bad");
-    state.doses = o.doses.filter(function(d){ return DRUG_BY_ID[d.drug]; })
-      .map(function(d){ return {t:d.t||"08:00", drug:d.drug, dose:+d.dose||0, dur:d.dur?+d.dur:undefined}; });
-    state.onThr = o.onThr||null; state.dysThr = o.dysThr||null;
-    state.days = Math.min(7,Math.max(1,+o.days||2)); state.comt = ["none","ent","opi","tol"].indexOf(o.comt)>=0? o.comt:"none";
-    $("onThr").value = state.onThr||""; $("dysThr").value = state.dysThr||"";
-    $("days").value = state.days; $("comt").value = state.comt;
-    cursorMin=null;
-    renderRows(); recompute();
-  }catch(e){
-    $("jsonio").value = "Could not read that JSON — export a regimen first to see the expected format.";
-  }
-});
-
-/* ---------------- Init ---------------- */
-renderPkTable();
-$("btnExample").click();
-</script>
+  <noscript>This tool requires JavaScript to calculate and draw exposure curves.</noscript>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
