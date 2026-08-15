@@ -10,6 +10,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -189,17 +190,80 @@ html, body {
   color: #4b5560;
 }
 
-@media (max-width: 980px) {
-  .scroll-hint { display: block; }
+@media (min-width: 701px) and (max-width: 980px) {
+  .scroll-hint:not([hidden]) { display: block; }
 }
 
 /* Touch devices: larger tap targets and a narrower sticky medicine
-   column so more hour boxes stay visible on a phone screen. */
+   column so more hour boxes stay visible when the table layout is used. */
 @media (pointer: coarse) {
   .slot { height: 54px; min-width: 42px; }
   .hour-label { min-width: 42px; padding: 8px 0; font-size: 14px; }
   .med-col { min-width: 132px; }
   .med-name { min-width: 122px; font-size: 16px; }
+}
+
+/* Phone layout: each medicine is a card with a 24-hour tap keypad,
+   grouped into night/morning/afternoon/evening rows. No sideways scroll. */
+.card-list {
+  display: grid;
+  gap: 14px;
+}
+
+.med-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--paper);
+}
+
+.med-card .med-name {
+  min-width: 0;
+  padding: 8px 4px 10px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid var(--line-light);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.hour-grid {
+  display: grid;
+  grid-template-columns: minmax(52px, auto) repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  align-items: stretch;
+}
+
+.part-label {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5560;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hour-btn {
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #4b5560;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hour-btn:active { background: var(--mark-soft); }
+
+.hour-btn[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #ffffff;
 }
 
 .sheet-footer {
@@ -227,7 +291,8 @@ html, body {
 @media print {
   @page { size: landscape; margin: 12mm; }
   body { font-size: 12px; }
-  .toolbar, .hint, noscript, .sheet-footer a { display: none; }
+  .toolbar, .hint, noscript, .sheet-footer a, .card-list, .scroll-hint { display: none !important; }
+  .table-scroll { display: block !important; }
   .sheet { padding: 0; max-width: none; }
   .time-sheet { min-width: 0; }
   .slot { height: 26px; }

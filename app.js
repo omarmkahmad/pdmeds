@@ -62,18 +62,42 @@ let state = validateRegimenPayload({ doses: [], days: 2 });
 let computed = null;
 let cursorMinute = 0;
 
-const CHART = {
-  width: 980,
-  height: 470,
-  left: 64,
-  right: 960,
-  top: 18,
-  bottom: 338,
-  stripY: 360,
-  stripHeight: 18,
-  labelY: 410,
-  yTop: 10
-};
+const compactChartQuery = window.matchMedia("(max-width: 640px)");
+
+function chartGeometry() {
+  if (compactChartQuery.matches) {
+    return {
+      compact: true,
+      width: 480,
+      height: 414,
+      left: 48,
+      right: 470,
+      top: 16,
+      bottom: 318,
+      stripY: 334,
+      stripHeight: 16,
+      labelY: 388,
+      hourStep: 6,
+      yTop: 10
+    };
+  }
+  return {
+    compact: false,
+    width: 980,
+    height: 470,
+    left: 64,
+    right: 960,
+    top: 18,
+    bottom: 338,
+    stripY: 360,
+    stripHeight: 18,
+    labelY: 410,
+    hourStep: 2,
+    yTop: 10
+  };
+}
+
+let CHART = chartGeometry();
 
 const DASH_PATTERNS = ["", "8 4", "2 3", "10 3 2 3", "5 3", "12 4", "3 2 1 2"];
 
@@ -216,6 +240,12 @@ function zoneLabel(classification) {
 }
 
 function drawChart() {
+  const previousYTop = CHART.yTop;
+  CHART = chartGeometry();
+  CHART.yTop = previousYTop;
+  const axisFont = CHART.compact ? 14 : 12;
+  const smallFont = CHART.compact ? 12.5 : 11;
+  const curveWidth = CHART.compact ? 2.1 : 1.8;
   const requestedTop = Math.max(
     computed.maximum,
     state.dyskinesiaThreshold ?? 0,
@@ -242,24 +272,24 @@ function drawChart() {
   for (let value = 0; value <= yTop + step / 100; value += step) {
     const y = yPosition(value);
     svg.push(`<line x1="${CHART.left}" y1="${y}" x2="${CHART.right}" y2="${y}" stroke="#d7dde2"/>`);
-    svg.push(`<text x="${CHART.left - 9}" y="${y + 4}" text-anchor="end" font-size="12" fill="#17202a">${round1(value)}</text>`);
+    svg.push(`<text x="${CHART.left - 9}" y="${y + 4}" text-anchor="end" font-size="${axisFont}" fill="#17202a">${round1(value)}</text>`);
   }
-  for (let hour = 0; hour <= 24; hour += 2) {
+  for (let hour = 0; hour <= 24; hour += CHART.hourStep) {
     const x = xPosition(hour * 60);
     svg.push(`<line x1="${x}" y1="${CHART.top}" x2="${x}" y2="${CHART.bottom}" stroke="#edf0f2"/>`);
-    svg.push(`<text x="${x}" y="${CHART.labelY}" text-anchor="middle" font-size="12" fill="#17202a">${String(hour).padStart(2, "0")}:00</text>`);
+    svg.push(`<text x="${x}" y="${CHART.labelY}" text-anchor="middle" font-size="${axisFont}" fill="#17202a">${String(hour).padStart(2, "0")}:00</text>`);
   }
   svg.push(`<line x1="${CHART.left}" y1="${CHART.top}" x2="${CHART.left}" y2="${CHART.bottom}" stroke="#17202a" stroke-width="1.5"/>`);
   svg.push(`<line x1="${CHART.left}" y1="${CHART.bottom}" x2="${CHART.right}" y2="${CHART.bottom}" stroke="#17202a" stroke-width="1.5"/>`);
-  svg.push(`<text transform="translate(17 ${(CHART.top + CHART.bottom) / 2}) rotate(-90)" text-anchor="middle" font-size="12" font-weight="700" fill="#17202a">Relative exposure units</text>`);
+  svg.push(`<text transform="translate(15 ${(CHART.top + CHART.bottom) / 2}) rotate(-90)" text-anchor="middle" font-size="${smallFont}" font-weight="700" fill="#17202a">Relative exposure units</text>`);
 
   if (state.onThreshold !== null) {
     svg.push(`<line x1="${CHART.left}" y1="${yPosition(state.onThreshold)}" x2="${CHART.right}" y2="${yPosition(state.onThreshold)}" stroke="#146c43" stroke-width="1.5" stroke-dasharray="7 4"/>`);
-    svg.push(`<text x="${CHART.right - 4}" y="${yPosition(state.onThreshold) - 6}" text-anchor="end" font-size="11" font-weight="700" fill="#146c43">User target</text>`);
+    svg.push(`<text x="${CHART.right - 4}" y="${yPosition(state.onThreshold) - 6}" text-anchor="end" font-size="${smallFont}" font-weight="700" fill="#146c43">User target</text>`);
   }
   if (state.dyskinesiaThreshold !== null) {
     svg.push(`<line x1="${CHART.left}" y1="${yPosition(state.dyskinesiaThreshold)}" x2="${CHART.right}" y2="${yPosition(state.dyskinesiaThreshold)}" stroke="#9c2f24" stroke-width="1.5" stroke-dasharray="2 3"/>`);
-    svg.push(`<text x="${CHART.right - 4}" y="${yPosition(state.dyskinesiaThreshold) - 6}" text-anchor="end" font-size="11" font-weight="700" fill="#9c2f24">User high-exposure threshold</text>`);
+    svg.push(`<text x="${CHART.right - 4}" y="${yPosition(state.dyskinesiaThreshold) - 6}" text-anchor="end" font-size="${smallFont}" font-weight="700" fill="#9c2f24">${CHART.compact ? "High threshold" : "User high-exposure threshold"}</text>`);
   }
 
   state.doses.forEach((dose, index) => {
@@ -269,7 +299,7 @@ function drawChart() {
       path.push(`${minute === 0 ? "M" : "L"}${xPosition(minute).toFixed(1)} ${yPosition(computed.series[index][minute]).toFixed(1)}`);
     }
     const dash = DASH_PATTERNS[index % DASH_PATTERNS.length];
-    svg.push(`<path d="${path.join(" ")}" fill="none" stroke="${PALETTE[index % PALETTE.length]}" stroke-width="1.8"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`);
+    svg.push(`<path d="${path.join(" ")}" fill="none" stroke="${PALETTE[index % PALETTE.length]}" stroke-width="${curveWidth}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`);
   });
 
   const totalPath = [];
@@ -293,7 +323,7 @@ function drawChart() {
       }
     }
     svg.push(`<rect x="${CHART.left}" y="${CHART.stripY}" width="${CHART.right - CHART.left}" height="${CHART.stripHeight}" fill="none" stroke="#17202a"/>`);
-    svg.push(`<text x="${CHART.left - 9}" y="${CHART.stripY + 13}" text-anchor="end" font-size="10" font-weight="700" fill="#17202a">Zones</text>`);
+    svg.push(`<text x="${CHART.left - 9}" y="${CHART.stripY + 13}" text-anchor="end" font-size="${CHART.compact ? 11 : 10}" font-weight="700" fill="#17202a">Zones</text>`);
   }
 
   const cursorX = xPosition(cursorMinute);
@@ -569,6 +599,12 @@ elements.chartBox.addEventListener("pointerdown", event => {
     const scale = bounds.width / CHART.width;
     updateReadout(((event.clientX - bounds.left) / scale - CHART.left) / (CHART.right - CHART.left) * MINUTES_PER_DAY);
   }
+});
+
+compactChartQuery.addEventListener("change", () => {
+  if (!computed) return;
+  drawChart();
+  updateReadout(cursorMinute);
 });
 
 elements.exportJson.addEventListener("click", prepareJson);

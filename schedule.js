@@ -1,10 +1,22 @@
 const ROWS = 8;
 const HOURS = 24;
 const STORAGE_KEY = "pdmeds-time-sheet-v1";
+const DAY_PARTS = [
+  { name: "Night", start: 0 },
+  { name: "Morning", start: 6 },
+  { name: "Afternoon", start: 12 },
+  { name: "Evening", start: 18 }
+];
 
 const hourHeader = document.getElementById("hourHeader");
 const sheetBody = document.getElementById("sheetBody");
 const saveNote = document.getElementById("saveNote");
+const tableWrap = document.getElementById("tableWrap");
+const cardList = document.getElementById("cardList");
+const scrollHint = document.querySelector(".scroll-hint");
+
+const phoneQuery = window.matchMedia("(max-width: 700px)");
+let forceTableLayout = false;
 
 function emptySheet() {
   return {
@@ -16,16 +28,16 @@ function emptySheet() {
 function loadSheet() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
-    const sheet = emptySheet();
+    const loaded = emptySheet();
     if (parsed && Array.isArray(parsed.names) && Array.isArray(parsed.marks)) {
       for (let row = 0; row < ROWS; row += 1) {
-        if (typeof parsed.names[row] === "string") sheet.names[row] = parsed.names[row].slice(0, 60);
+        if (typeof parsed.names[row] === "string") loaded.names[row] = parsed.names[row].slice(0, 60);
         for (let hour = 0; hour < HOURS; hour += 1) {
-          sheet.marks[row][hour] = Boolean(parsed.marks[row]?.[hour]);
+          loaded.marks[row][hour] = Boolean(parsed.marks[row]?.[hour]);
         }
       }
     }
-    return sheet;
+    return loaded;
   } catch {
     return emptySheet();
   }
@@ -43,51 +55,94 @@ function saveSheet() {
 
 const pad = value => String(value).padStart(2, "0");
 
-for (let hour = 0; hour < HOURS; hour += 1) {
-  const cell = document.createElement("th");
-  cell.scope = "col";
-  cell.className = "hour-label";
-  cell.textContent = pad(hour);
-  hourHeader.append(cell);
-}
-
-for (let row = 0; row < ROWS; row += 1) {
-  const tableRow = document.createElement("tr");
-
-  const nameCell = document.createElement("td");
-  nameCell.className = "med-cell";
-  const nameInput = document.createElement("input");
-  nameInput.className = "med-name";
-  nameInput.type = "text";
-  nameInput.maxLength = 60;
-  nameInput.placeholder = `Medicine ${row + 1}`;
-  nameInput.value = sheet.names[row];
-  nameInput.setAttribute("aria-label", `Name of medicine ${row + 1}`);
-  nameInput.addEventListener("input", () => {
-    sheet.names[row] = nameInput.value;
+function makeNameInput(row) {
+  const input = document.createElement("input");
+  input.className = "med-name";
+  input.type = "text";
+  input.maxLength = 60;
+  input.placeholder = `Medicine ${row + 1}`;
+  input.value = sheet.names[row];
+  input.setAttribute("aria-label", `Name of medicine ${row + 1}`);
+  input.addEventListener("input", () => {
+    sheet.names[row] = input.value;
     saveSheet();
   });
-  nameCell.append(nameInput);
-  tableRow.append(nameCell);
+  return input;
+}
 
+function makeToggle(row, hour, className, label) {
+  const control = document.createElement("button");
+  control.type = "button";
+  control.className = className;
+  control.textContent = label;
+  control.setAttribute("aria-pressed", String(sheet.marks[row][hour]));
+  control.setAttribute("aria-label", `Medicine ${row + 1} at ${pad(hour)}:00`);
+  control.addEventListener("click", () => {
+    sheet.marks[row][hour] = !sheet.marks[row][hour];
+    control.setAttribute("aria-pressed", String(sheet.marks[row][hour]));
+    saveSheet();
+  });
+  return control;
+}
+
+function renderTable() {
+  hourHeader.innerHTML = `<th scope="col" class="med-col"><span class="sr-only">Medicine name</span></th>`;
   for (let hour = 0; hour < HOURS; hour += 1) {
-    const cell = document.createElement("td");
-    const slot = document.createElement("button");
-    slot.type = "button";
-    slot.className = "slot";
-    slot.textContent = "✕";
-    slot.setAttribute("aria-pressed", String(sheet.marks[row][hour]));
-    slot.setAttribute("aria-label", `Medicine ${row + 1} at ${pad(hour)}:00`);
-    slot.addEventListener("click", () => {
-      sheet.marks[row][hour] = !sheet.marks[row][hour];
-      slot.setAttribute("aria-pressed", String(sheet.marks[row][hour]));
-      saveSheet();
-    });
-    cell.append(slot);
-    tableRow.append(cell);
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.className = "hour-label";
+    cell.textContent = pad(hour);
+    hourHeader.append(cell);
   }
 
-  sheetBody.append(tableRow);
+  sheetBody.innerHTML = "";
+  for (let row = 0; row < ROWS; row += 1) {
+    const tableRow = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    nameCell.className = "med-cell";
+    nameCell.append(makeNameInput(row));
+    tableRow.append(nameCell);
+    for (let hour = 0; hour < HOURS; hour += 1) {
+      const cell = document.createElement("td");
+      cell.append(makeToggle(row, hour, "slot", "✕"));
+      tableRow.append(cell);
+    }
+    sheetBody.append(tableRow);
+  }
+}
+
+function renderCards() {
+  cardList.innerHTML = "";
+  for (let row = 0; row < ROWS; row += 1) {
+    const card = document.createElement("section");
+    card.className = "med-card";
+    card.setAttribute("aria-label", `Medicine ${row + 1}`);
+    card.append(makeNameInput(row));
+
+    const grid = document.createElement("div");
+    grid.className = "hour-grid";
+    for (const part of DAY_PARTS) {
+      const label = document.createElement("span");
+      label.className = "part-label";
+      label.textContent = part.name;
+      grid.append(label);
+      for (let offset = 0; offset < 6; offset += 1) {
+        const hour = part.start + offset;
+        grid.append(makeToggle(row, hour, "hour-btn", pad(hour)));
+      }
+    }
+    card.append(grid);
+    cardList.append(card);
+  }
+}
+
+function render() {
+  const useCards = phoneQuery.matches && !forceTableLayout;
+  cardList.hidden = !useCards;
+  tableWrap.hidden = useCards;
+  if (scrollHint) scrollHint.hidden = useCards;
+  if (useCards) renderCards();
+  else renderTable();
 }
 
 document.getElementById("printSheet").addEventListener("click", () => window.print());
@@ -98,6 +153,21 @@ document.getElementById("clearSheet").addEventListener("click", () => {
   sheet.names = fresh.names;
   sheet.marks = fresh.marks;
   saveSheet();
-  sheetBody.querySelectorAll(".med-name").forEach(input => { input.value = ""; });
-  sheetBody.querySelectorAll(".slot").forEach(slot => slot.setAttribute("aria-pressed", "false"));
+  render();
 });
+
+phoneQuery.addEventListener("change", render);
+
+// Phones print the full table layout, not the tap cards.
+window.addEventListener("beforeprint", () => {
+  if (!phoneQuery.matches) return;
+  forceTableLayout = true;
+  render();
+});
+window.addEventListener("afterprint", () => {
+  if (!forceTableLayout) return;
+  forceTableLayout = false;
+  render();
+});
+
+render();
