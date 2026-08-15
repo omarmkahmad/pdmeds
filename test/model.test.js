@@ -1,14 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { COMT_OPTIONS, DRUGS, DRUG_BY_ID, LD_AUC } from "../src/drugs.js";
+import { DRUGS, DRUG_BY_ID, LD_AUC } from "../src/drugs.js";
 import {
   MAX_DOSES,
   ModelValidationError,
   calculateLedSummary,
   calculateStatistics,
   computeDay,
-  contributionAtMinute,
   longestCircularRun,
   modeledInfiniteAuc,
   validateRegimenPayload,
@@ -19,79 +18,72 @@ const baseState = {
   doses: [{ time: "08:00", drug: "sinemet", dose: 100, hidden: false }],
   onThreshold: null,
   dyskinesiaThreshold: null,
-  days: 2,
-  comt: "none"
+  days: 2
 };
 
+test("only the five levodopa preparations are modeled", () => {
+  assert.deepEqual(DRUGS.map(drug => drug.id).sort(), ["crexont", "inbrija", "rytary", "sinemet", "sinemetcr"]);
+  assert.ok(DRUGS.every(drug => drug.isLevodopa && drug.exposure.kind === "components"));
+});
+
 test("component curves are normalized to their declared exposure area", () => {
-  for (const drug of DRUGS.filter(item => item.exposure.kind === "components")) {
+  for (const drug of DRUGS) {
     const targetLed = 100 * drug.exposure.exposureFactor;
     const auc = modeledInfiniteAuc(drug, targetLed);
     assert.ok(Math.abs(auc - targetLed * LD_AUC) < 1e-8, drug.id);
   }
 });
 
-test("updated Jost conversion factors are represented", () => {
-  assert.equal(DRUG_BY_ID.inbrija.led.value, 0.69);
-  assert.equal(DRUG_BY_ID.duopa.led.value, 1.11);
-  assert.equal(DRUG_BY_ID.vyalev.led.value, 0.75);
-  assert.equal(DRUG_BY_ID.gocovri.led.value, 1.25);
+test("Jost conversion factors are represented", () => {
+  assert.equal(DRUG_BY_ID.sinemet.led.value, 1);
   assert.equal(DRUG_BY_ID.sinemetcr.led.value, 0.75);
+  assert.equal(DRUG_BY_ID.rytary.led.value, 0.5);
+  assert.equal(DRUG_BY_ID.crexont.led.value, 0.5);
+  assert.equal(DRUG_BY_ID.inbrija.led.value, 0.69);
 });
 
-test("fixed and regimen-level LED proposals do not pretend to be dose multipliers", () => {
-  const doses = [
-    { time: "08:00", drug: "sinemet", dose: 100 },
-    { time: "08:00", drug: "safin", dose: 50 },
-    { time: "08:00", drug: "istrad", dose: 20 }
-  ];
-  const summary = calculateLedSummary(doses, "ent");
-  assert.equal(summary.rows[0].totalLed, 133);
-  assert.equal(summary.rows[1].totalLed, 150);
-  assert.equal(summary.rows[2].totalLed, 26.6);
-  assert.equal(summary.totalLed, 309.6);
-});
-
-test("duplicate fixed-dose adjunct rows only contribute once", () => {
-  const doses = [
-    { time: "08:00", drug: "safin", dose: 50 },
-    { time: "20:00", drug: "safin", dose: 100 }
-  ];
-  const summary = calculateLedSummary(doses, "none");
+test("LEDD sums dose x factor across rows", () => {
+  const summary = calculateLedSummary([
+    { time: "08:00", drug: "sinemet", dose: 150 },
+    { time: "21:00", drug: "sinemetcr", dose: 200 },
+    { time: "12:00", drug: "inbrija", dose: 84 }
+  ]);
   assert.equal(summary.rows[0].totalLed, 150);
-  assert.equal(summary.rows[1].totalLed, 0);
+  assert.equal(summary.rows[1].totalLed, 150);
+  assert.ok(Math.abs(summary.rows[2].totalLed - 57.96) < 1e-9);
+  assert.ok(Math.abs(summary.totalLed - 357.96) < 1e-9);
 });
 
-test("COMT choices produce distinct LED and exposure effects", () => {
-  const dose = baseState.doses[0];
-  const drug = DRUG_BY_ID.sinemet;
-  const baseline = contributionAtMinute(dose, drug, 540, baseState, 100);
-  for (const id of ["ent", "opi", "tol"]) {
-    const state = { ...baseState, comt: id };
-    const rowLed = calculateLedSummary(state.doses, id).rows[0].totalLed;
-    const value = contributionAtMinute(dose, drug, 540, state, rowLed);
-    assert.ok(Math.abs(value / baseline - COMT_OPTIONS[id].exposureMultiplier) < 1e-10, id);
+test("prototype-key drug ids are rejected as unknown drugs", () => {
+  for (const bad of ["__proto__", "constructor", "toString"]) {
+    assert.throws(() => validateRegimenPayload({
+      doses: [{ time: "08:00", drug: bad, dose: 100 }],
+      days: 2
+    }), /unknown drug/);
   }
-  assert.equal(calculateLedSummary(baseState.doses, "ent").totalLed, 133);
-  assert.equal(calculateLedSummary(baseState.doses, "opi").totalLed, 150);
-  assert.equal(calculateLedSummary(baseState.doses, "tol").totalLed, 150);
+});
+
+test("removed drug ids are rejected as unknown drugs", () => {
+  for (const removed of ["madopar", "stalevo", "duopa", "vyalev", "onapgo", "rotig", "rasag", "amant", "istrad"]) {
+    assert.throws(() => validateRegimenPayload({
+      doses: [{ time: "08:00", drug: removed, dose: 100 }],
+      days: 2
+    }), /unknown drug/, removed);
+  }
 });
 
 test("invalid and non-finite imported values are rejected", () => {
   assert.throws(() => validateRegimenPayload({
     doses: [{ time: "08:00", drug: "sinemet", dose: Number.POSITIVE_INFINITY }],
-    days: 2,
-    comt: "none"
+    days: 2
   }), ModelValidationError);
   assert.throws(() => validateRegimenPayload({
     doses: [{ time: "25:99", drug: "sinemet", dose: 100 }],
-    days: 2,
-    comt: "none"
+    days: 2
   }), /invalid time/);
   assert.throws(() => validateRegimenPayload({
     doses: Array.from({ length: MAX_DOSES + 1 }, () => ({ time: "08:00", drug: "sinemet", dose: 100 })),
-    days: 2,
-    comt: "none"
+    days: 2
   }), /at most/);
 });
 
@@ -101,17 +93,18 @@ test("threshold validation requires an ordered pair", () => {
   assert.deepEqual(validateThresholds(50, 120).errors, []);
 });
 
-test("legacy exports remain importable and are normalized", () => {
+test("legacy exports remain importable; retired fields are ignored", () => {
   const state = validateRegimenPayload({
-    doses: [{ t: "07:30", drug: "duopa", dose: 1000, dur: 960 }],
+    doses: [{ t: "07:30", drug: "sinemet", dose: 100, dur: 960 }],
     onThr: 50,
     dysThr: 120,
     days: 2,
-    comt: "none"
+    comt: "ent"
   });
   assert.equal(state.doses[0].time, "07:30");
-  assert.equal(state.doses[0].duration, 960);
+  assert.equal(state.doses[0].duration, undefined);
   assert.equal(state.onThreshold, 50);
+  assert.equal("comt" in state, false);
 });
 
 test("longest low interval joins runs across midnight", () => {
