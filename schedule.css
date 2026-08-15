@@ -4,6 +4,7 @@
   --line: #7a828a;
   --line-light: #d7dde2;
   --mark: #146c43;
+  --mark-x: rgb(156, 156, 156);
   --mark-soft: #e7f3ec;
   --night: #f2f4f7;
 }
@@ -151,7 +152,7 @@ html, body {
 
 .slot[aria-pressed="true"] {
   background: var(--mark-soft);
-  color: var(--mark);
+  color: var(--mark-x);
   font-weight: 700;
 }
 
