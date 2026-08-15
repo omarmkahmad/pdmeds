@@ -41,7 +41,6 @@
                   <th scope="col">Time</th>
                   <th scope="col">Medication</th>
                   <th scope="col">Dose (mg)</th>
-                  <th scope="col">Infusion (min)</th>
                   <th scope="col">LEDD contribution</th>
                   <th scope="col"><span class="sr-only">Curve</span></th>
                   <th scope="col"><span class="sr-only">Remove</span></th>
@@ -71,18 +70,9 @@
               <label for="days">Days represented</label>
               <input type="number" id="days" min="1" max="7" step="1" inputmode="numeric" value="2">
             </div>
-            <div class="field field-wide">
-              <label for="comt">COMT adjustment</label>
-              <select id="comt">
-                <option value="none">None</option>
-                <option value="ent">Entacapone with each levodopa dose</option>
-                <option value="opi">Opicapone once daily</option>
-                <option value="tol">Tolcapone three times daily</option>
-              </select>
-            </div>
           </fieldset>
           <p class="form-message" id="formMessage" role="alert"></p>
-          <p class="hint">“Days represented” adds prior-day carryover for longer-half-life medications. Steady-state rows are displayed as constant pseudo-exposure. Thresholds are optional and user-defined; they are not validated clinical On/Off or dyskinesia cutoffs.</p>
+          <p class="hint">“Days represented” adds prior-day carryover for longer-half-life preparations. Thresholds are optional and user-defined; they are not validated clinical On/Off or dyskinesia cutoffs.</p>
         </div>
       </section>
 
@@ -149,16 +139,14 @@
               <tbody id="parameterBody"></tbody>
             </table>
           </div>
-          <p><strong>Not included:</strong> medications without a suitable exposure representation remain outside the graph even when a research LED proposal exists. Investigational or legacy products are labeled as such.</p>
+          <p><strong>Not included:</strong> the model covers five levodopa preparations (Sinemet, Sinemet CR, Rytary, Crexont, and Inbrija). Other Parkinson medications — levodopa infusions, dopamine agonists, MAO-B inhibitors, COMT inhibitors, and adjuncts — remain outside the graph even when a research LED proposal exists.</p>
         </div>
       </details>
 
       <details>
         <summary>Model assumptions and limitations</summary>
         <div class="details-body prose">
-          <p><strong>Exposure shapes.</strong> Oral and injected doses use a simplified linear rise to a peak followed by exponential elimination. Extended-release products use multiple components. Infusions approach a modeled steady level and decay after stopping. Component areas are normalized to a declared exposure factor.</p>
-          <p><strong>Not literal cross-drug plasma concentrations.</strong> Dopamine agonists, MAO-B inhibitors, amantadine, safinamide, and istradefylline do not become levodopa. Their curves are pseudo-exposure representations used only to make a regimen easier to inspect.</p>
-          <p><strong>COMT adjustment.</strong> LEDD uses the 2023 consensus factors. Exposure multipliers use approximate label-reported levodopa AUC effects: entacapone 1.35×, opicapone 1.78×, and tolcapone 2×. These simplified multipliers do not reproduce individual dose timing, food effects, or variability.</p>
+          <p><strong>Exposure shapes.</strong> Oral and inhaled doses use a simplified linear rise to a peak followed by exponential elimination. Extended-release products use multiple components. Component areas are normalized to a declared exposure factor.</p>
           <p><strong>Important omissions.</strong> Absorption lag, protein and meal effects, gastroparesis, renal/hepatic function, endogenous dopamine, drug interactions, rescue-dose context, and person-to-person variability are not modeled. Pharmacokinetics is not pharmacodynamics.</p>
           <p><strong>Primary conversion reference.</strong> Jost ST et al. <a href="https://movementdisorders.onlinelibrary.wiley.com/doi/10.1002/mds.29410" target="_blank" rel="noopener noreferrer">Levodopa Dose Equivalency in Parkinson’s Disease: Updated Systematic Review and Proposals</a>. Movement Disorders. 2023.</p>
         </div>

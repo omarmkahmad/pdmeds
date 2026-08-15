@@ -1,5 +1,4 @@
 import {
-  COMT_OPTIONS,
   DRUGS,
   DRUG_BY_ID,
   MINUTES_PER_DAY,
@@ -40,7 +39,6 @@ const elements = {
   onThreshold: $("onThreshold"),
   dyskinesiaThreshold: $("dyskinesiaThreshold"),
   days: $("days"),
-  comt: $("comt"),
   formMessage: $("formMessage"),
   readoutTime: $("readoutTime"),
   readoutValue: $("readoutValue"),
@@ -60,7 +58,7 @@ const elements = {
   parameterBody: $("parameterBody")
 };
 
-let state = validateRegimenPayload({ doses: [], days: 2, comt: "none" });
+let state = validateRegimenPayload({ doses: [], days: 2 });
 let computed = null;
 let cursorMinute = 0;
 
@@ -93,14 +91,11 @@ function synchronizeSettings() {
   elements.onThreshold.value = state.onThreshold ?? "";
   elements.dyskinesiaThreshold.value = state.dyskinesiaThreshold ?? "";
   elements.days.value = state.days;
-  elements.comt.value = state.comt;
   elements.exampleBadge.hidden = !state.example;
 }
 
 function ledFormula(drug) {
-  if (drug.led.kind === "factor") return `dose × ${drug.led.value}`;
-  if (drug.led.kind === "fixed") return `fixed ${drug.led.value} mg/day`;
-  return `${drug.led.value * 100}% of levodopa + COMT subtotal`;
+  return `dose × ${drug.led.value}`;
 }
 
 function drugOptions(selected) {
@@ -131,23 +126,19 @@ function renderParameterTable() {
 }
 
 function renderRows() {
-  const led = calculateLedSummary(state.doses, state.comt);
+  const led = calculateLedSummary(state.doses);
   if (!state.doses.length) {
-    elements.regimenBody.innerHTML = `<tr><td class="empty-row" colspan="7">No medication rows yet. Add a dose or load the clearly labeled example.</td></tr>`;
+    elements.regimenBody.innerHTML = `<tr><td class="empty-row" colspan="6">No medication rows yet. Add a dose or load the clearly labeled example.</td></tr>`;
     return;
   }
 
   elements.regimenBody.innerHTML = state.doses.map((dose, index) => {
     const drug = DRUG_BY_ID[dose.drug];
-    const duration = drug.exposure.kind === "infusion"
-      ? `<input type="number" min="10" max="1440" step="10" inputmode="numeric" value="${dose.duration}" data-index="${index}" data-field="duration" aria-label="Infusion duration for row ${index + 1}">`
-      : `<span aria-label="Not an infusion">—</span>`;
     const label = `${drug.name}, ${dose.dose} milligrams at ${dose.time}`;
     return `<tr>
       <td><input type="time" value="${dose.time}" data-index="${index}" data-field="time" aria-label="Dose time for row ${index + 1}"></td>
       <td><select data-index="${index}" data-field="drug" aria-label="Medication for row ${index + 1}">${drugOptions(drug.id)}</select></td>
       <td><input type="number" min="0" max="${MAX_DOSE_MG}" step="any" inputmode="decimal" value="${dose.dose}" data-index="${index}" data-field="dose" aria-label="Dose in milligrams for row ${index + 1}"></td>
-      <td>${duration}</td>
       <td><span id="row-led-${index}" title="Research levodopa-equivalent daily dose contribution">${round1(led.rows[index].totalLed)} mg</span></td>
       <td><span class="curve-chip" style="background:${PALETTE[index % PALETTE.length]}" aria-label="Curve color for row ${index + 1}"></span></td>
       <td><button class="button remove-button" type="button" data-remove="${index}" aria-label="Remove ${escapeHtml(label)}">×</button></td>
@@ -187,19 +178,15 @@ function handleRowChange(event) {
     const drug = DRUG_BY_ID[control.value];
     dose.drug = drug.id;
     dose.dose = drug.defaultDose;
-    if (drug.exposure.kind === "infusion") dose.duration = drug.defaultDuration;
-    else delete dose.duration;
   } else {
     const value = Number(control.value);
-    const minimum = field === "duration" ? 10 : 0;
-    const maximum = field === "duration" ? MINUTES_PER_DAY : MAX_DOSE_MG;
-    if (!Number.isFinite(value) || value < minimum || value > maximum) {
+    if (!Number.isFinite(value) || value < 0 || value > MAX_DOSE_MG) {
       control.setAttribute("aria-invalid", "true");
-      setMessage(elements.formMessage, `${field === "duration" ? "Infusion duration" : "Dose"} must be between ${minimum} and ${maximum}.`);
+      setMessage(elements.formMessage, `Dose must be between 0 and ${MAX_DOSE_MG}.`);
       control.value = dose[field];
       return;
     }
-    dose[field] = field === "duration" ? Math.round(value) : value;
+    dose[field] = value;
   }
   markPersonalized();
   renderRows();
@@ -360,7 +347,7 @@ function renderLegend() {
   const rows = state.doses.map((dose, index) => {
     const drug = DRUG_BY_ID[dose.drug];
     const name = drug.name.split(" — ")[0];
-    const time = drug.exposure.kind === "steady" ? "" : ` ${dose.time}`;
+    const time = ` ${dose.time}`;
     return `<button type="button" class="legend-button" data-legend-index="${index}" aria-pressed="${!dose.hidden}" aria-label="${dose.hidden ? "Show" : "Hide"} ${escapeHtml(name)} curve">
       <span class="legend-swatch" style="background:${PALETTE[index % PALETTE.length]}"></span>
       ${escapeHtml(name)}${time} · ${dose.dose} mg
@@ -393,8 +380,6 @@ function renderStatistics() {
     statCard(round1(stats.trough), "Model trough", `at ${formatClock(stats.troughMinute)}`),
     statCard(stats.fluctuationIndex === null ? "—" : round1(stats.fluctuationIndex), "Fluctuation index", "(peak − trough) / mean")
   ];
-  if (stats.comtLed > 0) cards.push(statCard(`${round1(stats.comtLed)} mg/day`, "COMT LED addition", COMT_OPTIONS[state.comt].name));
-  if (stats.specialLed > 0) cards.push(statCard(`${round1(stats.specialLed)} mg/day`, "Regimen-level proposals", "Fixed or subtotal-based adjuncts"));
   if (stats.targetMinutes !== undefined) {
     cards.push(statCard(formatDuration(stats.targetMinutes), "At/above target", `${Math.round(stats.targetMinutes / 14.4)}% of day`));
     cards.push(statCard(formatDuration(stats.lowMinutes), "Below target", `Longest circular interval ${formatDuration(stats.longestLowMinutes)}`));
@@ -511,13 +496,11 @@ elements.loadExample.addEventListener("click", () => {
       { time: "11:00", drug: "sinemet", dose: 100 },
       { time: "15:00", drug: "sinemet", dose: 100 },
       { time: "19:00", drug: "sinemet", dose: 100 },
-      { time: "07:00", drug: "rasag", dose: 1 },
-      { time: "21:00", drug: "ropinxl", dose: 8 }
+      { time: "21:00", drug: "sinemetcr", dose: 200 }
     ],
     onThreshold: 50,
     dyskinesiaThreshold: 120,
     days: 2,
-    comt: "none",
     example: true
   });
   cursorMinute = 0;
@@ -551,12 +534,6 @@ elements.days.addEventListener("change", () => {
   state.days = value;
   markPersonalized();
   setMessage(elements.formMessage);
-  recompute();
-});
-elements.comt.addEventListener("change", () => {
-  state.comt = elements.comt.value;
-  markPersonalized();
-  renderRows();
   recompute();
 });
 

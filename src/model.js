@@ -1,6 +1,4 @@
 import {
-  COMT_OPTIONS,
-  CONSTANT_LEVEL_PER_LED,
   DRUG_BY_ID,
   LD_AUC,
   LN2,
@@ -103,17 +101,10 @@ export function validateRegimenPayload(payload) {
     const dose = finiteNumber(rawDose.dose, {
       label: `Row ${row} dose`, minimum: 0, maximum: MAX_DOSE_MG
     }, errors);
-    let duration;
-    if (drug?.exposure.kind === "infusion") {
-      duration = finiteNumber(rawDose.duration ?? rawDose.dur ?? drug.defaultDuration, {
-        label: `Row ${row} infusion duration`, minimum: 10, maximum: MINUTES_PER_DAY, integer: true
-      }, errors);
-    }
     return drug ? {
       time: isValidTime(time) ? time : "08:00",
       drug: drug.id,
       dose,
-      ...(duration === undefined ? {} : { duration }),
       hidden: Boolean(rawDose.hidden)
     } : null;
   }).filter(Boolean);
@@ -127,10 +118,6 @@ export function validateRegimenPayload(payload) {
   const days = finiteNumber(payload.days ?? 2, {
     label: "Days in treatment", minimum: 1, maximum: 7, integer: true
   }, errors);
-  const comt = Object.hasOwn(COMT_OPTIONS, payload.comt) ? payload.comt : "none";
-  if (payload.comt !== undefined && !Object.hasOwn(COMT_OPTIONS, payload.comt)) {
-    errors.push("COMT selection is not recognized.");
-  }
   if (errors.length) throw new ModelValidationError(errors);
 
   return {
@@ -138,52 +125,25 @@ export function validateRegimenPayload(payload) {
     onThreshold: thresholds.onThreshold,
     dyskinesiaThreshold: thresholds.dyskinesiaThreshold,
     days,
-    comt,
     example: Boolean(payload.example)
   };
 }
 
-function firstActiveIndex(doses, drugId) {
-  return doses.findIndex(dose => dose.drug === drugId && dose.dose > 0);
-}
-
-export function calculateLedSummary(doses, comtId = "none") {
+export function calculateLedSummary(doses) {
   if (!Array.isArray(doses) || doses.length > MAX_DOSES) {
     throw new ModelValidationError([`A regimen can contain at most ${MAX_DOSES} rows.`]);
   }
-  const comt = COMT_OPTIONS[comtId] ?? COMT_OPTIONS.none;
   const rows = doses.map((dose, index) => {
     const drug = DRUG_BY_ID[dose.drug];
     if (!drug || !Number.isFinite(dose.dose) || dose.dose <= 0) {
-      return { index, baseLed: 0, comtLed: 0, specialLed: 0, totalLed: 0 };
+      return { index, totalLed: 0 };
     }
-    let baseLed = 0;
-    if (drug.led.kind === "factor") baseLed = dose.dose * drug.led.value;
-    if (drug.led.kind === "fixed" && index === firstActiveIndex(doses, drug.id)) baseLed = drug.led.value;
-    const comtLed = drug.isLevodopa && !drug.comtIncluded ? baseLed * comt.ledFactor : 0;
-    return { index, baseLed, comtLed, specialLed: 0, totalLed: baseLed + comtLed };
-  });
-
-  const levodopaSubtotal = rows.reduce((sum, row, index) => {
-    const drug = DRUG_BY_ID[doses[index]?.drug];
-    return drug?.isLevodopa ? sum + row.baseLed + row.comtLed : sum;
-  }, 0);
-
-  doses.forEach((dose, index) => {
-    const drug = DRUG_BY_ID[dose.drug];
-    if (!drug || dose.dose <= 0 || drug.led.kind !== "levodopa-subtotal") return;
-    if (index !== firstActiveIndex(doses, drug.id)) return;
-    rows[index].specialLed = levodopaSubtotal * drug.led.value;
-    rows[index].totalLed += rows[index].specialLed;
+    return { index, totalLed: dose.dose * drug.led.value };
   });
 
   return {
     rows,
-    baseLed: rows.reduce((sum, row) => sum + row.baseLed, 0),
-    comtLed: rows.reduce((sum, row) => sum + row.comtLed, 0),
-    specialLed: rows.reduce((sum, row) => sum + row.specialLed, 0),
-    totalLed: rows.reduce((sum, row) => sum + row.totalLed, 0),
-    levodopaSubtotal
+    totalLed: rows.reduce((sum, row) => sum + row.totalLed, 0)
   };
 }
 
@@ -200,7 +160,6 @@ export function normalizedComponentPeaks(drug, targetExposureLed) {
 }
 
 export function modeledInfiniteAuc(drug, targetExposureLed) {
-  if (drug.exposure.kind === "steady") return targetExposureLed * LD_AUC;
   if (drug.exposure.kind !== "components") return null;
   const peaks = normalizedComponentPeaks(drug, targetExposureLed);
   return drug.exposure.values.reduce((sum, component, index) => (
@@ -208,42 +167,15 @@ export function modeledInfiniteAuc(drug, targetExposureLed) {
   ), 0);
 }
 
-function exposureTargetLed(dose, drug, rowLed, comtId) {
-  if (drug.exposure.kind === "steady") return rowLed;
-  let target = dose.dose * drug.exposure.exposureFactor;
-  if (drug.isLevodopa && !drug.comtIncluded) {
-    target *= (COMT_OPTIONS[comtId] ?? COMT_OPTIONS.none).exposureMultiplier;
-  }
-  return target;
-}
-
-export function contributionAtMinute(dose, drug, minute, state, rowLed) {
+export function contributionAtMinute(dose, drug, minute, state) {
   if (!drug || !(dose.dose > 0) || !Number.isFinite(minute)) return 0;
-  const targetLed = exposureTargetLed(dose, drug, rowLed, state.comt);
+  const targetLed = dose.dose * drug.exposure.exposureFactor;
   if (!(targetLed > 0) || !Number.isFinite(targetLed)) return 0;
-  if (drug.exposure.kind === "steady") return targetLed * CONSTANT_LEVEL_PER_LED;
 
   const doseMinute = toMinute(dose.time);
   if (!Number.isFinite(doseMinute)) return 0;
   const days = Math.min(7, Math.max(1, state.days));
   let level = 0;
-
-  if (drug.exposure.kind === "infusion") {
-    const duration = Math.min(MINUTES_PER_DAY, Math.max(10, dose.duration ?? drug.defaultDuration));
-    const steadyState = (targetLed / duration) * LD_AUC;
-    for (let day = 0; day < days; day += 1) {
-      const elapsed = minute - doseMinute + MINUTES_PER_DAY * day;
-      if (elapsed < 0) continue;
-      if (elapsed <= duration) {
-        level += steadyState * (1 - Math.pow(0.5, elapsed / drug.exposure.halfLife));
-      } else {
-        level += steadyState
-          * (1 - Math.pow(0.5, duration / drug.exposure.halfLife))
-          * Math.pow(0.5, (elapsed - duration) / drug.exposure.halfLife);
-      }
-    }
-    return level;
-  }
 
   const peaks = normalizedComponentPeaks(drug, targetLed);
   for (let day = 0; day < days; day += 1) {
@@ -267,7 +199,7 @@ export function computeDay(state) {
   if (!state || !Array.isArray(state.doses) || state.doses.length > MAX_DOSES) {
     throw new ModelValidationError([`A regimen can contain at most ${MAX_DOSES} rows.`]);
   }
-  const led = calculateLedSummary(state.doses, state.comt);
+  const led = calculateLedSummary(state.doses);
   const series = state.doses.map(() => new Float64Array(MINUTES_PER_DAY + 1));
   const total = new Float64Array(MINUTES_PER_DAY + 1);
 
@@ -278,8 +210,7 @@ export function computeDay(state) {
         dose,
         DRUG_BY_ID[dose.drug],
         minute,
-        state,
-        led.rows[index]?.totalLed ?? 0
+        state
       );
       if (!Number.isFinite(value)) throw new ModelValidationError([`Row ${index + 1} produced a non-finite result.`]);
       series[index][minute] = value;
@@ -337,9 +268,6 @@ export function calculateStatistics(computed, state) {
   const mean = values.reduce((sum, value) => sum + value, 0) / MINUTES_PER_DAY;
   const result = {
     ledd: computed.led.totalLed,
-    baseLed: computed.led.baseLed,
-    comtLed: computed.led.comtLed,
-    specialLed: computed.led.specialLed,
     peak: computed.maximum,
     peakMinute: computed.maximumMinute,
     trough: computed.minimum,
@@ -366,12 +294,10 @@ export function exportRegimen(state) {
       time: dose.time,
       drug: dose.drug,
       dose: dose.dose,
-      ...(dose.duration === undefined ? {} : { duration: dose.duration }),
       ...(dose.hidden ? { hidden: true } : {})
     })),
     onThreshold: state.onThreshold,
     dyskinesiaThreshold: state.dyskinesiaThreshold,
-    days: state.days,
-    comt: state.comt
+    days: state.days
   };
 }
