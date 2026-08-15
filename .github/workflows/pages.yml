@@ -36,6 +36,7 @@ jobs:
           mkdir -p _site/src
           cp index.html styles.css app.js _site/
           cp schedule.html schedule.css schedule.js _site/
+          cp apple-touch-icon.png _site/
           cp src/drugs.js src/model.js _site/src/
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
