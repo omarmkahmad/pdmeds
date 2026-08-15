@@ -281,7 +281,7 @@ function drawChart() {
   }
   svg.push(`<line x1="${CHART.left}" y1="${CHART.top}" x2="${CHART.left}" y2="${CHART.bottom}" stroke="#17202a" stroke-width="1.5"/>`);
   svg.push(`<line x1="${CHART.left}" y1="${CHART.bottom}" x2="${CHART.right}" y2="${CHART.bottom}" stroke="#17202a" stroke-width="1.5"/>`);
-  svg.push(`<text transform="translate(15 ${(CHART.top + CHART.bottom) / 2}) rotate(-90)" text-anchor="middle" font-size="${smallFont}" font-weight="700" fill="#17202a">Relative exposure units</text>`);
+  svg.push(`<text transform="translate(${CHART.compact ? 15 : 17} ${(CHART.top + CHART.bottom) / 2}) rotate(-90)" text-anchor="middle" font-size="${CHART.compact ? 12.5 : 12}" font-weight="700" fill="#17202a">Relative exposure units</text>`);
 
   if (state.onThreshold !== null) {
     svg.push(`<line x1="${CHART.left}" y1="${yPosition(state.onThreshold)}" x2="${CHART.right}" y2="${yPosition(state.onThreshold)}" stroke="#146c43" stroke-width="1.5" stroke-dasharray="7 4"/>`);

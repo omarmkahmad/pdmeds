@@ -177,10 +177,8 @@ input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px 
   cursor: pointer;
 }
 .button:hover { background: #e9edf0; }
-.button:active { background: #dfe5e9; }
 .button-primary { color: var(--paper); border-color: var(--accent-dark); background: var(--accent-dark); }
 .button-primary:hover { background: #002f53; }
-.button-primary:active { background: #00223d; }
 .remove-button { min-width: 44px; min-height: 44px; padding: 6px; color: var(--danger); }
 .curve-chip { display: inline-block; width: 18px; height: 5px; border: 1px solid rgb(0 0 0 / 0.2); }
 
@@ -334,6 +332,8 @@ textarea { width: 100%; min-height: 180px; font-family: ui-monospace, SFMono-Reg
 /* Touch devices: larger targets, and 16px+ form text so iOS Safari
    does not auto-zoom when a field receives focus. */
 @media (pointer: coarse) {
+  .button:active { background: #dfe5e9; }
+  .button-primary:active { background: #00223d; }
   .regimen-table input,
   .regimen-table select,
   textarea {
