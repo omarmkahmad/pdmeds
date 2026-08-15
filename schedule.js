@@ -1,5 +1,7 @@
-const ROWS = 8;
 const HOURS = 24;
+const DEFAULT_ROWS = 2;
+const MIN_ROWS = 1;
+const MAX_ROWS = 12;
 const STORAGE_KEY = "pdmeds-time-sheet-v1";
 const DAY_PARTS = [
   { name: "Night", start: 0 },
@@ -14,28 +16,42 @@ const saveNote = document.getElementById("saveNote");
 const tableWrap = document.getElementById("tableWrap");
 const cardList = document.getElementById("cardList");
 const scrollHint = document.querySelector(".scroll-hint");
+const addMedicineButton = document.getElementById("addMedicine");
 
 const phoneQuery = window.matchMedia("(max-width: 700px)");
 let forceTableLayout = false;
 
-function emptySheet() {
+function emptyRowMarks() {
+  return Array.from({ length: HOURS }, () => false);
+}
+
+function emptySheet(rows = DEFAULT_ROWS) {
   return {
-    names: Array.from({ length: ROWS }, () => ""),
-    marks: Array.from({ length: ROWS }, () => Array.from({ length: HOURS }, () => false))
+    names: Array.from({ length: rows }, () => ""),
+    marks: Array.from({ length: rows }, () => emptyRowMarks())
   };
+}
+
+function rowHasData(loaded, row) {
+  return loaded.names[row].trim() !== "" || loaded.marks[row].some(Boolean);
 }
 
 function loadSheet() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
-    const loaded = emptySheet();
-    if (parsed && Array.isArray(parsed.names) && Array.isArray(parsed.marks)) {
-      for (let row = 0; row < ROWS; row += 1) {
-        if (typeof parsed.names[row] === "string") loaded.names[row] = parsed.names[row].slice(0, 60);
-        for (let hour = 0; hour < HOURS; hour += 1) {
-          loaded.marks[row][hour] = Boolean(parsed.marks[row]?.[hour]);
-        }
+    if (!parsed || !Array.isArray(parsed.names) || !Array.isArray(parsed.marks)) return emptySheet();
+    const rows = Math.min(MAX_ROWS, Math.max(MIN_ROWS, parsed.names.length));
+    const loaded = emptySheet(rows);
+    for (let row = 0; row < rows; row += 1) {
+      if (typeof parsed.names[row] === "string") loaded.names[row] = parsed.names[row].slice(0, 60);
+      for (let hour = 0; hour < HOURS; hour += 1) {
+        loaded.marks[row][hour] = Boolean(parsed.marks[row]?.[hour]);
       }
+    }
+    // Drop empty trailing rows left over from older fixed-size sheets.
+    while (loaded.names.length > DEFAULT_ROWS && !rowHasData(loaded, loaded.names.length - 1)) {
+      loaded.names.pop();
+      loaded.marks.pop();
     }
     return loaded;
   } catch {
@@ -44,6 +60,10 @@ function loadSheet() {
 }
 
 const sheet = loadSheet();
+
+function rowCount() {
+  return sheet.names.length;
+}
 
 function saveSheet() {
   try {
@@ -54,6 +74,10 @@ function saveSheet() {
 }
 
 const pad = value => String(value).padStart(2, "0");
+
+function rowLabel(row) {
+  return sheet.names[row].trim() || `Medicine ${row + 1}`;
+}
 
 function makeNameInput(row) {
   const input = document.createElement("input");
@@ -85,6 +109,33 @@ function makeToggle(row, hour, className, label) {
   return control;
 }
 
+function removeRow(row) {
+  if (rowCount() <= MIN_ROWS) return;
+  if (rowHasData(sheet, row) && !window.confirm(`Remove ${rowLabel(row)} and its marked times?`)) return;
+  sheet.names.splice(row, 1);
+  sheet.marks.splice(row, 1);
+  saveSheet();
+  render();
+}
+
+function makeRemoveButton(row, className) {
+  const control = document.createElement("button");
+  control.type = "button";
+  control.className = className;
+  control.textContent = className === "remove-med" ? "✕" : "Remove";
+  control.setAttribute("aria-label", `Remove ${rowLabel(row)}`);
+  control.disabled = rowCount() <= MIN_ROWS;
+  control.addEventListener("click", () => removeRow(row));
+  return control;
+}
+
+function updateAddButton() {
+  addMedicineButton.disabled = rowCount() >= MAX_ROWS;
+  addMedicineButton.textContent = rowCount() >= MAX_ROWS
+    ? `Limit of ${MAX_ROWS} medicines reached`
+    : "＋ Add another medicine";
+}
+
 function renderTable() {
   hourHeader.innerHTML = `<th scope="col" class="med-col"><span class="sr-only">Medicine name</span></th>`;
   for (let hour = 0; hour < HOURS; hour += 1) {
@@ -96,7 +147,7 @@ function renderTable() {
   }
 
   sheetBody.innerHTML = "";
-  for (let row = 0; row < ROWS; row += 1) {
+  for (let row = 0; row < rowCount(); row += 1) {
     const tableRow = document.createElement("tr");
     const nameCell = document.createElement("td");
     nameCell.className = "med-cell";
@@ -107,17 +158,26 @@ function renderTable() {
       cell.append(makeToggle(row, hour, "slot", "✕"));
       tableRow.append(cell);
     }
+    const removeCell = document.createElement("td");
+    removeCell.className = "remove-cell";
+    removeCell.append(makeRemoveButton(row, "remove-med"));
+    tableRow.append(removeCell);
     sheetBody.append(tableRow);
   }
 }
 
 function renderCards() {
   cardList.innerHTML = "";
-  for (let row = 0; row < ROWS; row += 1) {
+  for (let row = 0; row < rowCount(); row += 1) {
     const card = document.createElement("section");
     card.className = "med-card";
     card.setAttribute("aria-label", `Medicine ${row + 1}`);
-    card.append(makeNameInput(row));
+
+    const head = document.createElement("div");
+    head.className = "card-head";
+    head.append(makeNameInput(row));
+    head.append(makeRemoveButton(row, "remove-card"));
+    card.append(head);
 
     const grid = document.createElement("div");
     grid.className = "hour-grid";
@@ -143,7 +203,18 @@ function render() {
   if (scrollHint) scrollHint.hidden = useCards;
   if (useCards) renderCards();
   else renderTable();
+  updateAddButton();
 }
+
+addMedicineButton.addEventListener("click", () => {
+  if (rowCount() >= MAX_ROWS) return;
+  sheet.names.push("");
+  sheet.marks.push(emptyRowMarks());
+  saveSheet();
+  render();
+  const inputs = document.querySelectorAll(phoneQuery.matches ? ".med-card .med-name" : ".med-cell .med-name");
+  inputs[inputs.length - 1]?.focus();
+});
 
 document.getElementById("printSheet").addEventListener("click", () => window.print());
 

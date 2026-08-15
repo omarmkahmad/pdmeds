@@ -269,6 +269,70 @@ html, body {
   color: #ffffff;
 }
 
+/* Add / remove medicines */
+.row-actions { margin-top: 12px; }
+
+.row-actions .button:disabled {
+  cursor: default;
+  opacity: 0.55;
+  background: var(--paper);
+}
+
+.remove-head { background: var(--night); min-width: 44px; }
+
+.remove-cell { background: var(--paper); }
+
+.remove-med {
+  display: block;
+  width: 100%;
+  height: 48px;
+  min-width: 44px;
+  border: none;
+  background: transparent;
+  color: #9c2f24;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remove-med:hover:not(:disabled) { background: #fff2f0; }
+.remove-med:disabled { color: var(--off, #bfbfbf); opacity: 0.4; cursor: default; }
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid var(--line-light);
+}
+
+.card-head .med-name {
+  flex: 1;
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
+.remove-card {
+  flex: none;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid #9c2f24;
+  border-radius: 8px;
+  background: var(--paper);
+  color: #9c2f24;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remove-card:disabled { opacity: 0.4; cursor: default; }
+
 .sheet-footer {
   margin-top: 24px;
   border-top: 2px solid var(--line-light);
@@ -292,13 +356,25 @@ html, body {
 }
 
 @media print {
-  @page { size: landscape; margin: 12mm; }
-  body { font-size: 12px; }
-  .toolbar, .hint, noscript, .sheet-footer a, .card-list, .scroll-hint { display: none !important; }
-  .table-scroll { display: block !important; }
+  @page { size: letter landscape; margin: 10mm; }
+  body { font-size: 11px; }
+  .toolbar, .hint, noscript, .sheet-footer a, .card-list, .scroll-hint,
+  .row-actions, .remove-head, .remove-cell { display: none !important; }
+  .table-scroll { display: block !important; overflow: visible; }
   .sheet { padding: 0; max-width: none; }
-  .time-sheet { min-width: 0; }
-  .slot { height: 26px; }
-  .med-name { padding: 6px 4px; }
+  .sheet-header h1 { font-size: 22px; }
+  .lead { font-size: 13px; margin-bottom: 8px; }
+  /* Fixed-percentage layout: the medicine column takes 14% and the 24
+     hour columns share the rest equally, so the grid always fits one
+     page width regardless of paper size or orientation. */
+  .time-sheet { min-width: 0; width: 100%; table-layout: fixed; }
+  .med-col, .med-cell { position: static; min-width: 0; width: 14%; box-shadow: none; }
+  .hour-label { min-width: 0; padding: 3px 0; font-size: 9px; }
+  .day-part { padding: 3px 1px; font-size: 10px; }
+  .part-hours { font-size: 8px; }
+  .med-name { min-width: 0; width: 100%; font-size: 11px; padding: 5px 3px; }
+  .slot { height: 22px; min-width: 0; font-size: 13px; }
+  .time-sheet caption { font-size: 10px; }
+  .sheet-footer { font-size: 10px; margin-top: 10px; }
   .time-sheet th, .time-sheet td { border-color: #000; }
 }
