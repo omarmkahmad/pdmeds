@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="A simple printable time sheet for marking the hours to take Parkinson medication doses.">
+  <meta name="theme-color" content="#146c43">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="apple-mobile-web-app-title" content="Medicine Times">
+  <link rel="icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>My Medicine Times — PD Dose Time Sheet</title>
   <link rel="stylesheet" href="schedule.css">
@@ -21,7 +26,11 @@
       <span class="save-note" id="saveNote" role="status" aria-live="polite">Marks save automatically on this device.</span>
     </div>
 
-    <div class="table-scroll" role="region" aria-label="Medicine time sheet" tabindex="0">
+    <p class="scroll-hint" aria-hidden="true">Swipe the table sideways to reach all 24 hours →</p>
+
+    <div class="card-list" id="cardList" hidden></div>
+
+    <div class="table-scroll" id="tableWrap" role="region" aria-label="Medicine time sheet" tabindex="0">
       <table class="time-sheet">
         <caption>Hours of the day: 00 is midnight, 06 is morning, 12 is noon, 18 is evening.</caption>
         <thead>
