@@ -12,7 +12,6 @@ const DAY_PARTS = [
 
 const hourHeader = document.getElementById("hourHeader");
 const sheetBody = document.getElementById("sheetBody");
-const saveNote = document.getElementById("saveNote");
 const tableWrap = document.getElementById("tableWrap");
 const cardList = document.getElementById("cardList");
 const scrollHint = document.querySelector(".scroll-hint");
@@ -69,7 +68,8 @@ function saveSheet() {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sheet));
   } catch {
-    saveNote.textContent = "Saving is not available on this device; use Print instead.";
+    // Storage unavailable (private browsing, quota): the sheet still works
+    // for the current visit and for printing.
   }
 }
 

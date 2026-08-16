@@ -10,36 +10,38 @@
   <link rel="icon" href="apple-touch-icon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>My Medicine Times — PD Dose Time Sheet</title>
+  <title>PD Medication Schedule</title>
   <link rel="stylesheet" href="schedule.css">
 </head>
 <body>
   <main class="sheet">
     <header class="sheet-header">
-      <h1>My Medicine Times</h1>
-      <p class="lead">Write each medicine on a row, then tap the boxes for the hours you take it.</p>
+      <h1>PD Medication Schedule</h1>
+      <div class="name-line">
+        <label for="patientName">Name</label>
+        <input type="text" id="patientName" maxlength="80" autocomplete="off">
+      </div>
     </header>
 
     <div class="toolbar">
       <button class="button" type="button" id="printSheet">Print this sheet</button>
       <button class="button" type="button" id="clearSheet">Clear all marks</button>
-      <span class="save-note" id="saveNote" role="status" aria-live="polite">Marks save automatically on this device.</span>
     </div>
 
-    <p class="scroll-hint" aria-hidden="true">Swipe the table sideways to reach all 24 hours →</p>
+    <p class="scroll-hint" aria-hidden="true">Swipe the table sideways to view all 24 hours →</p>
 
     <div class="card-list" id="cardList" hidden></div>
 
     <div class="table-scroll" id="tableWrap" role="region" aria-label="Medicine time sheet" tabindex="0">
       <table class="time-sheet">
-        <caption>Hours of the day: 00 is midnight, 06 is morning, 12 is noon, 18 is evening.</caption>
+        <caption>Hours of the day: 00 is midnight/12:00am, 06 is 6:00am, 12 is noon/12:00pm, and 18 is 6:00pm.</caption>
         <thead>
           <tr>
             <th scope="col" class="med-col">Medicine</th>
-            <th scope="col" colspan="6" class="day-part">Night<br><span class="part-hours">00–05</span></th>
-            <th scope="col" colspan="6" class="day-part">Morning<br><span class="part-hours">06–11</span></th>
-            <th scope="col" colspan="6" class="day-part">Afternoon<br><span class="part-hours">12–17</span></th>
-            <th scope="col" colspan="6" class="day-part">Evening<br><span class="part-hours">18–23</span></th>
+            <th scope="col" colspan="6" class="day-part">Night</th>
+            <th scope="col" colspan="6" class="day-part">Morning</th>
+            <th scope="col" colspan="6" class="day-part">Afternoon</th>
+            <th scope="col" colspan="6" class="day-part">Evening</th>
             <th scope="col" rowspan="2" class="remove-head"><span class="sr-only">Remove medicine</span></th>
           </tr>
           <tr id="hourHeader">
@@ -54,10 +56,9 @@
       <button class="button" type="button" id="addMedicine">＋ Add another medicine</button>
     </div>
 
-    <p class="hint">Tip: for printing, mark the times first, then press “Print this sheet”. You can also print a blank sheet and fill it in with a pen.</p>
 
     <footer class="sheet-footer">
-      <p>This sheet is a personal reminder aid only. It does not give medical advice. Follow the schedule your care team prescribed, and talk to them before changing any medicine time or dose.</p>
+      <p>For use by medical professionals to aid patients in visual representation of dose schedules. Always consult your medical provider before changing dose scheduling.</p>
       <p><a href="index.html">Back to the PD Medication Exposure Explorer</a></p>
     </footer>
   </main>
