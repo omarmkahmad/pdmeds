@@ -12,9 +12,9 @@ const DAY_PARTS = [
 
 const hourHeader = document.getElementById("hourHeader");
 const sheetBody = document.getElementById("sheetBody");
-const saveNote = document.getElementById("saveNote");
 const tableWrap = document.getElementById("tableWrap");
 const cardList = document.getElementById("cardList");
+const hoursNote = document.getElementById("hoursNote");
 const scrollHint = document.querySelector(".scroll-hint");
 const addMedicineButton = document.getElementById("addMedicine");
 
@@ -69,7 +69,8 @@ function saveSheet() {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sheet));
   } catch {
-    saveNote.textContent = "Saving is not available on this device; use Print instead.";
+    // Storage unavailable (private browsing, quota): the sheet still works
+    // for the current visit and for printing.
   }
 }
 
@@ -200,6 +201,7 @@ function render() {
   const useCards = phoneQuery.matches && !forceTableLayout;
   cardList.hidden = !useCards;
   tableWrap.hidden = useCards;
+  hoursNote.hidden = !useCards;
   if (scrollHint) scrollHint.hidden = useCards;
   if (useCards) renderCards();
   else renderTable();

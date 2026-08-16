@@ -35,9 +35,27 @@ html, body {
   letter-spacing: -0.01em;
 }
 
-.lead {
-  margin: 0 0 16px;
+.name-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 10px 0 16px;
   font-size: 20px;
+  font-weight: 700;
+}
+
+.name-line input {
+  flex: 0 1 360px;
+  min-height: 44px;
+  border: none;
+  border-bottom: 2px solid var(--ink);
+  border-radius: 0;
+  padding: 4px 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink);
 }
 
 .toolbar {
@@ -76,8 +94,6 @@ html, body {
   outline-offset: 2px;
 }
 
-.save-note { font-size: 15px; color: #4b5560; }
-
 .table-scroll { overflow-x: auto; }
 
 .time-sheet {
@@ -113,7 +129,6 @@ html, body {
   background: var(--night);
 }
 
-.part-hours { font-weight: 400; font-size: 13px; }
 
 .hour-label {
   font-size: 13px;
@@ -190,6 +205,12 @@ html, body {
   margin: 0 0 8px;
   font-size: 15px;
   font-weight: 700;
+  color: #4b5560;
+}
+
+.hours-note {
+  margin: 0 0 10px;
+  font-size: 15px;
   color: #4b5560;
 }
 
@@ -359,11 +380,18 @@ html, body {
   @page { size: letter landscape; margin: 10mm; }
   body { font-size: 11px; }
   .toolbar, .hint, noscript, .sheet-footer a, .card-list, .scroll-hint,
-  .row-actions, .remove-head, .remove-cell { display: none !important; }
+  .hours-note, .row-actions, .remove-head, .remove-cell { display: none !important; }
   .table-scroll { display: block !important; overflow: visible; }
   .sheet { padding: 0; max-width: none; }
   .sheet-header h1 { font-size: 22px; }
-  .lead { font-size: 13px; margin-bottom: 8px; }
+  .name-line { font-size: 14px; margin: 6px 0 10px; }
+  .name-line input {
+    min-height: 0;
+    flex-basis: 300px;
+    padding: 2px 6px;
+    border-bottom: 1.5px solid #000;
+    font-size: 13px;
+  }
   /* Fixed-percentage layout: the medicine column takes 14% and the 24
      hour columns share the rest equally, so the grid always fits one
      page width regardless of paper size or orientation. */
@@ -371,7 +399,6 @@ html, body {
   .med-col, .med-cell { position: static; min-width: 0; width: 14%; box-shadow: none; }
   .hour-label { min-width: 0; padding: 3px 0; font-size: 9px; }
   .day-part { padding: 3px 1px; font-size: 10px; }
-  .part-hours { font-size: 8px; }
   .med-name { min-width: 0; width: 100%; font-size: 11px; padding: 5px 3px; }
   .slot { height: 22px; min-width: 0; font-size: 13px; }
   .time-sheet caption { font-size: 10px; }
