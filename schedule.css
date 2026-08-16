@@ -208,6 +208,12 @@ html, body {
   color: #4b5560;
 }
 
+.hours-note {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: #4b5560;
+}
+
 @media (min-width: 701px) and (max-width: 980px) {
   .scroll-hint:not([hidden]) { display: block; }
 }
@@ -374,7 +380,7 @@ html, body {
   @page { size: letter landscape; margin: 10mm; }
   body { font-size: 11px; }
   .toolbar, .hint, noscript, .sheet-footer a, .card-list, .scroll-hint,
-  .row-actions, .remove-head, .remove-cell { display: none !important; }
+  .hours-note, .row-actions, .remove-head, .remove-cell { display: none !important; }
   .table-scroll { display: block !important; overflow: visible; }
   .sheet { padding: 0; max-width: none; }
   .sheet-header h1 { font-size: 22px; }

@@ -14,6 +14,7 @@ const hourHeader = document.getElementById("hourHeader");
 const sheetBody = document.getElementById("sheetBody");
 const tableWrap = document.getElementById("tableWrap");
 const cardList = document.getElementById("cardList");
+const hoursNote = document.getElementById("hoursNote");
 const scrollHint = document.querySelector(".scroll-hint");
 const addMedicineButton = document.getElementById("addMedicine");
 
@@ -200,6 +201,7 @@ function render() {
   const useCards = phoneQuery.matches && !forceTableLayout;
   cardList.hidden = !useCards;
   tableWrap.hidden = useCards;
+  hoursNote.hidden = !useCards;
   if (scrollHint) scrollHint.hidden = useCards;
   if (useCards) renderCards();
   else renderTable();
