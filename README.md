@@ -38,6 +38,15 @@ LEDD conversion factors follow Jost et al. (2023):
 
 - [Jost et al., Levodopa Dose Equivalency in Parkinson’s Disease](https://movementdisorders.onlinelibrary.wiley.com/doi/10.1002/mds.29410)
 
+## Validation
+
+The exposure model's curve shapes have been checked against published
+pharmacokinetic landmarks for each formulation and against a published
+population PK model of oral levodopa/carbidopa. Findings, figures, and known
+divergences (including the LED-vs-bioavailability scaling choice) are in
+[docs/validation.md](docs/validation.md); regenerate with
+`node scripts/validation.mjs` and `python3 scripts/validation_plots.py`.
+
 ## Project layout
 
 - `index.html` — semantic application shell and safety information
