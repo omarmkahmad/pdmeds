@@ -243,28 +243,27 @@ function rowsWithData() {
   return sheet.names.map((_, row) => row).filter(row => rowHasData(sheet, row));
 }
 
-// Epic's rich-text editor keeps only primitive HTML on paste, so the table
-// uses legacy border/cellpadding attributes and minimal inline styles --
-// no classes, no CSS layout -- and a plain "X" for marks.
+// Epic's rich-text editor keeps only primitive HTML on paste, and this
+// page's Content Security Policy makes the browser's clipboard sanitizer
+// drop style attributes -- so the table is built from legacy HTML
+// attributes only (border/align/bgcolor, <b>), with a plain "X" for marks.
 function buildEpicHtml(rows) {
-  const cellStyle = "border:1px solid #000;padding:2px 4px;text-align:center;";
-  const headStyle = cellStyle + "background:#eeeeee;font-weight:bold;";
   const parts = [];
   const patientName = document.getElementById("patientName").value.trim();
-  parts.push(`<p style="font-family:Arial,sans-serif;"><b>PD Medication Schedule</b>${patientName ? ` &mdash; ${escapeHtml(patientName)}` : ""}</p>`);
-  parts.push(`<table border="1" cellspacing="0" cellpadding="2" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:10pt;">`);
-  let header = `<tr><th style="${headStyle}text-align:left;">Medication</th>`;
-  for (let hour = 0; hour < HOURS; hour += 1) header += `<th style="${headStyle}">${pad(hour)}</th>`;
+  parts.push(`<p><b>PD Medication Schedule</b>${patientName ? ` &mdash; ${escapeHtml(patientName)}` : ""}</p>`);
+  parts.push(`<table border="1" cellspacing="0" cellpadding="3">`);
+  let header = `<tr><th align="left" bgcolor="#EEEEEE">Medication</th>`;
+  for (let hour = 0; hour < HOURS; hour += 1) header += `<th align="center" bgcolor="#EEEEEE">${pad(hour)}</th>`;
   parts.push(header + "</tr>");
   for (const row of rows) {
-    let line = `<tr><td style="${cellStyle}text-align:left;white-space:nowrap;">${escapeHtml(rowLabel(row))}</td>`;
+    let line = `<tr><td align="left">${escapeHtml(rowLabel(row))}</td>`;
     for (let hour = 0; hour < HOURS; hour += 1) {
-      line += `<td style="${cellStyle}">${sheet.marks[row][hour] ? "X" : "&nbsp;"}</td>`;
+      line += `<td align="center">${sheet.marks[row][hour] ? "<b>X</b>" : "&nbsp;"}</td>`;
     }
     parts.push(line + "</tr>");
   }
   parts.push("</table>");
-  parts.push(`<p style="font-family:Arial,sans-serif;font-size:8pt;">Hours are 24-hour clock (00 = midnight, 12 = noon). X marks a scheduled dose time.</p>`);
+  parts.push(`<p>Hours are 24-hour clock (00 = midnight, 12 = noon). X marks a scheduled dose time.</p>`);
   return parts.join("");
 }
 
