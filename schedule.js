@@ -76,6 +76,49 @@ function saveSheet() {
 
 const pad = value => String(value).padStart(2, "0");
 
+/* ---------- Clock format (24-hour vs 12-hour am/pm) ---------- */
+
+const CLOCK_KEY = "pdmeds-clock-format";
+let clock12 = false;
+try {
+  clock12 = window.localStorage.getItem(CLOCK_KEY) === "12";
+} catch {
+  clock12 = false;
+}
+
+function hour12Parts(hour) {
+  const suffix = hour < 12 ? "am" : "pm";
+  const twelve = hour % 12 === 0 ? 12 : hour % 12;
+  return { time: `${twelve}:00`, suffix };
+}
+
+// Plain-text form for aria labels, the Epic table, and the text flavor.
+function hourText(hour) {
+  if (!clock12) return `${pad(hour)}:00`;
+  const { time, suffix } = hour12Parts(hour);
+  return `${time} ${suffix}`;
+}
+
+// Stacked two-line form so 12-hour labels fit the narrow grid columns.
+function hourLabelHtml(hour) {
+  if (!clock12) return pad(hour);
+  const { time, suffix } = hour12Parts(hour);
+  return `${time}<span class="ampm">${suffix}</span>`;
+}
+
+const CAPTION_24 = "Hours of the day: 00 is midnight/12:00am, 06 is 6:00am, 12 is noon/12:00pm, and 18 is 6:00pm.";
+const CAPTION_12 = "Times run from 12:00 am (midnight) through 11:00 pm; 12:00 pm is noon.";
+
+function applyClockFormatChrome() {
+  document.body.classList.toggle("clock12", clock12);
+  const toggle = document.getElementById("clockToggle");
+  toggle.setAttribute("aria-checked", String(clock12));
+  document.getElementById("clockLabel24").classList.toggle("is-active", !clock12);
+  document.getElementById("clockLabel12").classList.toggle("is-active", clock12);
+  document.getElementById("hoursCaption").textContent = clock12 ? CAPTION_12 : CAPTION_24;
+  hoursNote.textContent = clock12 ? CAPTION_12 : CAPTION_24;
+}
+
 function rowLabel(row) {
   return sheet.names[row].trim() || `Medicine ${row + 1}`;
 }
@@ -99,9 +142,10 @@ function makeToggle(row, hour, className, label) {
   const control = document.createElement("button");
   control.type = "button";
   control.className = className;
-  control.textContent = label;
+  if (className === "hour-btn") control.innerHTML = hourLabelHtml(hour);
+  else control.textContent = label;
   control.setAttribute("aria-pressed", String(sheet.marks[row][hour]));
-  control.setAttribute("aria-label", `Medicine ${row + 1} at ${pad(hour)}:00`);
+  control.setAttribute("aria-label", `Medicine ${row + 1} at ${hourText(hour)}`);
   control.addEventListener("click", () => {
     sheet.marks[row][hour] = !sheet.marks[row][hour];
     control.setAttribute("aria-pressed", String(sheet.marks[row][hour]));
@@ -143,7 +187,7 @@ function renderTable() {
     const cell = document.createElement("th");
     cell.scope = "col";
     cell.className = "hour-label";
-    cell.textContent = pad(hour);
+    cell.innerHTML = hourLabelHtml(hour);
     hourHeader.append(cell);
   }
 
@@ -189,7 +233,7 @@ function renderCards() {
       grid.append(label);
       for (let offset = 0; offset < 6; offset += 1) {
         const hour = part.start + offset;
-        grid.append(makeToggle(row, hour, "hour-btn", pad(hour)));
+        grid.append(makeToggle(row, hour, "hour-btn", ""));
       }
     }
     card.append(grid);
@@ -198,6 +242,7 @@ function renderCards() {
 }
 
 function render() {
+  applyClockFormatChrome();
   const useCards = phoneQuery.matches && !forceTableLayout;
   cardList.hidden = !useCards;
   tableWrap.hidden = useCards;
@@ -207,6 +252,16 @@ function render() {
   else renderTable();
   updateAddButton();
 }
+
+document.getElementById("clockToggle").addEventListener("click", () => {
+  clock12 = !clock12;
+  try {
+    window.localStorage.setItem(CLOCK_KEY, clock12 ? "12" : "24");
+  } catch {
+    // Preference simply will not persist.
+  }
+  render();
+});
 
 addMedicineButton.addEventListener("click", () => {
   if (rowCount() >= MAX_ROWS) return;
@@ -219,6 +274,111 @@ addMedicineButton.addEventListener("click", () => {
 });
 
 document.getElementById("printSheet").addEventListener("click", () => window.print());
+
+/* ---------- Copy for Epic (rich-text clipboard) ---------- */
+
+const copyStatus = document.getElementById("copyStatus");
+let copyStatusTimer = null;
+
+function setCopyStatus(message) {
+  copyStatus.textContent = message;
+  if (copyStatusTimer) window.clearTimeout(copyStatusTimer);
+  if (message) copyStatusTimer = window.setTimeout(() => { copyStatus.textContent = ""; }, 6000);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function rowsWithData() {
+  return sheet.names.map((_, row) => row).filter(row => rowHasData(sheet, row));
+}
+
+// Epic's rich-text editor keeps only primitive HTML on paste, and this
+// page's Content Security Policy makes the browser's clipboard sanitizer
+// drop style attributes -- so the table is built from legacy HTML
+// attributes only (border/align/bgcolor, <b>), with a plain "X" for marks.
+function buildEpicHtml(rows) {
+  const parts = [];
+  const patientName = document.getElementById("patientName").value.trim();
+  parts.push(`<p><b>PD Medication Schedule</b>${patientName ? ` &mdash; ${escapeHtml(patientName)}` : ""}</p>`);
+  parts.push(`<table border="1" cellspacing="0" cellpadding="3">`);
+  let header = `<tr><th align="left" bgcolor="#EEEEEE">Medication</th>`;
+  for (let hour = 0; hour < HOURS; hour += 1) header += `<th align="center" bgcolor="#EEEEEE">${clock12 ? hourText(hour) : pad(hour)}</th>`;
+  parts.push(header + "</tr>");
+  for (const row of rows) {
+    let line = `<tr><td align="left">${escapeHtml(rowLabel(row))}</td>`;
+    for (let hour = 0; hour < HOURS; hour += 1) {
+      line += `<td align="center">${sheet.marks[row][hour] ? "<b>X</b>" : "&nbsp;"}</td>`;
+    }
+    parts.push(line + "</tr>");
+  }
+  parts.push("</table>");
+  parts.push(clock12
+    ? `<p>X marks a scheduled dose time.</p>`
+    : `<p>Hours are 24-hour clock (00 = midnight, 12 = noon). X marks a scheduled dose time.</p>`);
+  return parts.join("");
+}
+
+function buildEpicText(rows) {
+  const lines = ["PD Medication Schedule"];
+  for (const row of rows) {
+    const times = [];
+    for (let hour = 0; hour < HOURS; hour += 1) {
+      if (sheet.marks[row][hour]) times.push(hourText(hour));
+    }
+    lines.push(`${rowLabel(row)}: ${times.length ? times.join(", ") : "no times marked"}`);
+  }
+  return lines.join("\n");
+}
+
+function copyViaSelection(html) {
+  const holder = document.createElement("div");
+  holder.contentEditable = "true";
+  holder.style.position = "fixed";
+  holder.style.left = "-9999px";
+  holder.innerHTML = html;
+  document.body.append(holder);
+  const range = document.createRange();
+  range.selectNodeContents(holder);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  const copied = document.execCommand("copy");
+  selection.removeAllRanges();
+  holder.remove();
+  return copied;
+}
+
+document.getElementById("copyEpic").addEventListener("click", async () => {
+  const rows = rowsWithData();
+  if (!rows.length) {
+    setCopyStatus("Nothing to copy yet — name a medicine or mark a time first.");
+    return;
+  }
+  const html = buildEpicHtml(rows);
+  const text = buildEpicText(rows);
+  let copied = false;
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([text], { type: "text/plain" })
+      })]);
+      copied = true;
+    } catch {
+      copied = false;
+    }
+  }
+  if (!copied) copied = copyViaSelection(html);
+  setCopyStatus(copied
+    ? "Copied. Paste into the Epic note with Ctrl+V (Cmd+V on Mac)."
+    : "Copy was blocked by the browser — select the table and copy manually.");
+});
 
 document.getElementById("clearSheet").addEventListener("click", () => {
   if (!window.confirm("Clear every mark and medicine name?")) return;
