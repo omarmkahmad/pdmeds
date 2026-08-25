@@ -66,6 +66,12 @@ html, body {
   margin-bottom: 14px;
 }
 
+.copy-status {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--mark);
+}
+
 .button {
   font: inherit;
   font-weight: 700;

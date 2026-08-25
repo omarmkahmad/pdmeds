@@ -220,6 +220,110 @@ addMedicineButton.addEventListener("click", () => {
 
 document.getElementById("printSheet").addEventListener("click", () => window.print());
 
+/* ---------- Copy for Epic (rich-text clipboard) ---------- */
+
+const copyStatus = document.getElementById("copyStatus");
+let copyStatusTimer = null;
+
+function setCopyStatus(message) {
+  copyStatus.textContent = message;
+  if (copyStatusTimer) window.clearTimeout(copyStatusTimer);
+  if (message) copyStatusTimer = window.setTimeout(() => { copyStatus.textContent = ""; }, 6000);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function rowsWithData() {
+  return sheet.names.map((_, row) => row).filter(row => rowHasData(sheet, row));
+}
+
+// Epic's rich-text editor keeps only primitive HTML on paste, so the table
+// uses legacy border/cellpadding attributes and minimal inline styles --
+// no classes, no CSS layout -- and a plain "X" for marks.
+function buildEpicHtml(rows) {
+  const cellStyle = "border:1px solid #000;padding:2px 4px;text-align:center;";
+  const headStyle = cellStyle + "background:#eeeeee;font-weight:bold;";
+  const parts = [];
+  const patientName = document.getElementById("patientName").value.trim();
+  parts.push(`<p style="font-family:Arial,sans-serif;"><b>PD Medication Schedule</b>${patientName ? ` &mdash; ${escapeHtml(patientName)}` : ""}</p>`);
+  parts.push(`<table border="1" cellspacing="0" cellpadding="2" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:10pt;">`);
+  let header = `<tr><th style="${headStyle}text-align:left;">Medication</th>`;
+  for (let hour = 0; hour < HOURS; hour += 1) header += `<th style="${headStyle}">${pad(hour)}</th>`;
+  parts.push(header + "</tr>");
+  for (const row of rows) {
+    let line = `<tr><td style="${cellStyle}text-align:left;white-space:nowrap;">${escapeHtml(rowLabel(row))}</td>`;
+    for (let hour = 0; hour < HOURS; hour += 1) {
+      line += `<td style="${cellStyle}">${sheet.marks[row][hour] ? "X" : "&nbsp;"}</td>`;
+    }
+    parts.push(line + "</tr>");
+  }
+  parts.push("</table>");
+  parts.push(`<p style="font-family:Arial,sans-serif;font-size:8pt;">Hours are 24-hour clock (00 = midnight, 12 = noon). X marks a scheduled dose time.</p>`);
+  return parts.join("");
+}
+
+function buildEpicText(rows) {
+  const lines = ["PD Medication Schedule"];
+  for (const row of rows) {
+    const times = [];
+    for (let hour = 0; hour < HOURS; hour += 1) {
+      if (sheet.marks[row][hour]) times.push(`${pad(hour)}:00`);
+    }
+    lines.push(`${rowLabel(row)}: ${times.length ? times.join(", ") : "no times marked"}`);
+  }
+  return lines.join("\n");
+}
+
+function copyViaSelection(html) {
+  const holder = document.createElement("div");
+  holder.contentEditable = "true";
+  holder.style.position = "fixed";
+  holder.style.left = "-9999px";
+  holder.innerHTML = html;
+  document.body.append(holder);
+  const range = document.createRange();
+  range.selectNodeContents(holder);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  const copied = document.execCommand("copy");
+  selection.removeAllRanges();
+  holder.remove();
+  return copied;
+}
+
+document.getElementById("copyEpic").addEventListener("click", async () => {
+  const rows = rowsWithData();
+  if (!rows.length) {
+    setCopyStatus("Nothing to copy yet — name a medicine or mark a time first.");
+    return;
+  }
+  const html = buildEpicHtml(rows);
+  const text = buildEpicText(rows);
+  let copied = false;
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([text], { type: "text/plain" })
+      })]);
+      copied = true;
+    } catch {
+      copied = false;
+    }
+  }
+  if (!copied) copied = copyViaSelection(html);
+  setCopyStatus(copied
+    ? "Copied. Paste into the Epic note with Ctrl+V (Cmd+V on Mac)."
+    : "Copy was blocked by the browser — select the table and copy manually.");
+});
+
 document.getElementById("clearSheet").addEventListener("click", () => {
   if (!window.confirm("Clear every mark and medicine name?")) return;
   const fresh = emptySheet();
