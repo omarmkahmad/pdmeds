@@ -30,6 +30,14 @@
       <span class="copy-status" id="copyStatus" role="status" aria-live="polite"></span>
     </div>
 
+    <div class="time-toggle">
+      <span id="clockLabel24" class="clock-label is-active">24-hour</span>
+      <button type="button" id="clockToggle" role="switch" aria-checked="false" aria-label="Show times as 12-hour am/pm">
+        <span class="knob"></span>
+      </button>
+      <span id="clockLabel12" class="clock-label">12-hour (am/pm)</span>
+    </div>
+
     <p class="scroll-hint" aria-hidden="true">Swipe the table sideways to view all 24 hours →</p>
 
     <p class="hours-note" id="hoursNote" hidden>Hours of the day: 00 is midnight/12:00am, 06 is 6:00am, 12 is noon/12:00pm, and 18 is 6:00pm.</p>
@@ -38,7 +46,7 @@
 
     <div class="table-scroll" id="tableWrap" role="region" aria-label="Medicine time sheet" tabindex="0">
       <table class="time-sheet">
-        <caption>Hours of the day: 00 is midnight/12:00am, 06 is 6:00am, 12 is noon/12:00pm, and 18 is 6:00pm.</caption>
+        <caption id="hoursCaption">Hours of the day: 00 is midnight/12:00am, 06 is 6:00am, 12 is noon/12:00pm, and 18 is 6:00pm.</caption>
         <thead>
           <tr>
             <th scope="col" class="med-col">Medicine</th>

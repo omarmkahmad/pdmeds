@@ -72,6 +72,75 @@ html, body {
   color: var(--mark);
 }
 
+/* Clock format switch */
+.time-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+
+.clock-label { color: #4b5560; }
+.clock-label.is-active { color: var(--ink); font-weight: 700; }
+
+#clockToggle {
+  position: relative;
+  width: 56px;
+  height: 32px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#clockToggle .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: left 0.15s ease;
+}
+
+#clockToggle[aria-checked="true"] .knob { left: 27px; }
+
+#clockToggle:focus-visible {
+  outline: 3px solid var(--mark);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #clockToggle .knob { transition: none; }
+}
+
+/* Stacked 12-hour labels ("1:00" over "am") in grid columns */
+.hour-label .ampm,
+.hour-btn .ampm {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+body.clock12 .hour-label {
+  font-size: 11px;
+  padding: 4px 1px;
+  min-width: 36px;
+}
+
+body.clock12 .med-col { min-width: 150px; }
+body.clock12 .med-name { min-width: 140px; }
+
+body.clock12 .hour-btn { font-size: 13px; }
+body.clock12 .hour-btn .ampm { font-size: 9px; }
+
 .button {
   font: inherit;
   font-weight: 700;
@@ -386,7 +455,7 @@ html, body {
   @page { size: letter landscape; margin: 10mm; }
   body { font-size: 11px; }
   .toolbar, .hint, noscript, .sheet-footer a, .card-list, .scroll-hint,
-  .hours-note, .row-actions, .remove-head, .remove-cell { display: none !important; }
+  .hours-note, .row-actions, .remove-head, .remove-cell, .time-toggle { display: none !important; }
   .table-scroll { display: block !important; overflow: visible; }
   .sheet { padding: 0; max-width: none; }
   .sheet-header h1 { font-size: 22px; }
@@ -404,6 +473,7 @@ html, body {
   .time-sheet { min-width: 0; width: 100%; table-layout: fixed; }
   .med-col, .med-cell { position: static; min-width: 0; width: 14%; box-shadow: none; }
   .hour-label { min-width: 0; padding: 3px 0; font-size: 9px; }
+  .hour-label .ampm { font-size: 7px; }
   .day-part { padding: 3px 1px; font-size: 10px; }
   .med-name { min-width: 0; width: 100%; font-size: 11px; padding: 5px 3px; }
   .slot { height: 22px; min-width: 0; font-size: 13px; }
