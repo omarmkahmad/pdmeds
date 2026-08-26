@@ -4,7 +4,7 @@
   --line: #7a828a;
   --line-light: #d7dde2;
   --mark: #146c43;
-  --mark-x: rgb(156, 156, 156);
+  --mark-box: #6e6e6e;
   --mark-soft: #e7f3ec;
   --night: #f2f4f7;
 }
@@ -264,10 +264,11 @@ body.clock12 .hour-btn .ampm { font-size: 9px; }
 .slot:hover { background: var(--mark-soft); }
 
 .slot[aria-pressed="true"] {
-  background: var(--mark-soft);
-  color: var(--mark-x);
-  font-weight: 700;
+  background: var(--mark-box);
+  color: transparent;
 }
+
+.slot[aria-pressed="true"]:hover { background: #5c5c5c; }
 
 .hint {
   margin-top: 14px;
@@ -360,8 +361,8 @@ body.clock12 .hour-btn .ampm { font-size: 9px; }
 .hour-btn:active { background: var(--mark-soft); }
 
 .hour-btn[aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--mark-box);
+  border-color: var(--mark-box);
   color: #ffffff;
 }
 
@@ -477,6 +478,15 @@ body.clock12 .hour-btn .ampm { font-size: 9px; }
   .day-part { padding: 3px 1px; font-size: 10px; }
   .med-name { min-width: 0; width: 100%; font-size: 11px; padding: 5px 3px; }
   .slot { height: 22px; min-width: 0; font-size: 13px; }
+  /* Borders always print, even with "background graphics" disabled, so
+     marked cells are filled with a thick border rather than relying on
+     the background color alone. */
+  .slot[aria-pressed="true"] {
+    border: 11px solid var(--mark-box);
+    background: var(--mark-box);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
   .time-sheet caption { font-size: 10px; }
   .sheet-footer { font-size: 10px; margin-top: 10px; }
   .time-sheet th, .time-sheet td { border-color: #000; }
