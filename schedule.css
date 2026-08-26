@@ -455,9 +455,8 @@ body.clock12 .hour-btn .ampm { font-size: 9px; }
 @media print {
   @page { size: letter landscape; margin: 10mm; }
   body { font-size: 11px; }
-  .toolbar, .hint, noscript, .back-link, .card-list, .scroll-hint,
+  .toolbar, .hint, noscript, .sheet-footer, .card-list, .scroll-hint,
   .hours-note, .row-actions, .remove-head, .remove-cell, .time-toggle { display: none !important; }
-  .sheet-footer a { color: #000; text-decoration: none; }
   .table-scroll { display: block !important; overflow: visible; }
   .sheet { padding: 0; max-width: none; }
   .sheet-header h1 { font-size: 22px; }
