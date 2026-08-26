@@ -38,6 +38,14 @@ jobs:
           cp schedule.html schedule.css schedule.js _site/
           cp apple-touch-icon.png _site/
           cp src/drugs.js src/model.js _site/src/
+      - name: Stamp deploy date and cache-bust schedule assets
+        run: |
+          STAMP="$(TZ=America/Chicago date +%-m/%-d/%y)"
+          SHORT_SHA="${GITHUB_SHA::8}"
+          sed -i "s|<span id=\"lastUpdated\">[^<]*</span>|<span id=\"lastUpdated\">${STAMP}</span>|" _site/schedule.html
+          sed -i "s|href=\"schedule.css\"|href=\"schedule.css?v=${SHORT_SHA}\"|" _site/schedule.html
+          sed -i "s|src=\"schedule.js\"|src=\"schedule.js?v=${SHORT_SHA}\"|" _site/schedule.html
+          grep -o 'Last updated: <span id="lastUpdated">[^<]*</span>' _site/schedule.html
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:

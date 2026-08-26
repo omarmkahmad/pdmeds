@@ -313,7 +313,7 @@ function buildEpicHtml(rows) {
   for (const row of rows) {
     let line = `<tr><td align="left">${escapeHtml(rowLabel(row))}</td>`;
     for (let hour = 0; hour < HOURS; hour += 1) {
-      line += `<td align="center">${sheet.marks[row][hour] ? "<b>X</b>" : "&nbsp;"}</td>`;
+      line += `<td align="center">${sheet.marks[row][hour] ? "X" : "&nbsp;"}</td>`;
     }
     parts.push(line + "</tr>");
   }

@@ -455,7 +455,7 @@ body.clock12 .hour-btn .ampm { font-size: 9px; }
 @media print {
   @page { size: letter landscape; margin: 10mm; }
   body { font-size: 11px; }
-  .toolbar, .hint, noscript, .sheet-footer a, .card-list, .scroll-hint,
+  .toolbar, .hint, noscript, .sheet-footer, .card-list, .scroll-hint,
   .hours-note, .row-actions, .remove-head, .remove-cell, .time-toggle { display: none !important; }
   .table-scroll { display: block !important; overflow: visible; }
   .sheet { padding: 0; max-width: none; }
