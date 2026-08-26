@@ -313,14 +313,16 @@ function buildEpicHtml(rows) {
   for (const row of rows) {
     let line = `<tr><td align="left">${escapeHtml(rowLabel(row))}</td>`;
     for (let hour = 0; hour < HOURS; hour += 1) {
-      line += `<td align="center">${sheet.marks[row][hour] ? "<b>X</b>" : "&nbsp;"}</td>`;
+      line += sheet.marks[row][hour]
+        ? `<td align="center" bgcolor="#6E6E6E">&nbsp;</td>`
+        : `<td align="center">&nbsp;</td>`;
     }
     parts.push(line + "</tr>");
   }
   parts.push("</table>");
   parts.push(clock12
-    ? `<p>X marks a scheduled dose time.</p>`
-    : `<p>Hours are 24-hour clock (00 = midnight, 12 = noon). X marks a scheduled dose time.</p>`);
+    ? `<p>Shaded cells mark scheduled dose times.</p>`
+    : `<p>Hours are 24-hour clock (00 = midnight, 12 = noon). Shaded cells mark scheduled dose times.</p>`);
   return parts.join("");
 }
 
