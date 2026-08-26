@@ -324,15 +324,49 @@ function buildEpicHtml(rows) {
   return parts.join("");
 }
 
+// Plain-text flavor: a compact aligned grid in the style of Epic's own
+// SmartLink tables, using only the hours that have marked doses. This is
+// what Epic's classic note editor receives on direct paste (it reads only
+// RTF and plain text from the clipboard, and browsers cannot write RTF).
 function buildEpicText(rows) {
-  const lines = ["PD Medication Schedule"];
-  for (const row of rows) {
-    const times = [];
-    for (let hour = 0; hour < HOURS; hour += 1) {
-      if (sheet.marks[row][hour]) times.push(hourText(hour));
-    }
-    lines.push(`${rowLabel(row)}: ${times.length ? times.join(", ") : "no times marked"}`);
+  const hoursUsed = [];
+  for (let hour = 0; hour < HOURS; hour += 1) {
+    if (rows.some(row => sheet.marks[row][hour])) hoursUsed.push(hour);
   }
+  const shortLabel = hour => {
+    if (!clock12) return `${pad(hour)}:00`;
+    const { time, suffix } = hour12Parts(hour);
+    return `${time}${suffix[0]}`;
+  };
+
+  const lines = ["PD Medication Schedule", ""];
+  if (!hoursUsed.length) {
+    for (const row of rows) lines.push(`${rowLabel(row)}: no times marked`);
+    return lines.join("\n");
+  }
+
+  const nameWidth = Math.min(24, Math.max(10, ...rows.map(row => rowLabel(row).length)));
+  const columns = hoursUsed.map(hour => ({ hour, label: shortLabel(hour) }));
+  const cell = (content, width) => {
+    const left = Math.floor((width - content.length) / 2);
+    return " ".repeat(Math.max(0, left)) + content + " ".repeat(Math.max(0, width - content.length - left));
+  };
+
+  let header = "Medication".padEnd(nameWidth);
+  let rule = "-".repeat(nameWidth);
+  for (const column of columns) {
+    header += ` | ${column.label}`;
+    rule += `-+-${"-".repeat(column.label.length)}`;
+  }
+  lines.push(header, rule);
+  for (const row of rows) {
+    let line = rowLabel(row).slice(0, nameWidth).padEnd(nameWidth);
+    for (const column of columns) {
+      line += ` | ${cell(sheet.marks[row][column.hour] ? "X" : "", column.label.length)}`;
+    }
+    lines.push(line);
+  }
+  lines.push("", "X marks a scheduled dose time.");
   return lines.join("\n");
 }
 
