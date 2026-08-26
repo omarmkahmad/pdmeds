@@ -2,7 +2,6 @@ const HOURS = 24;
 const DEFAULT_ROWS = 2;
 const MIN_ROWS = 1;
 const MAX_ROWS = 12;
-const STORAGE_KEY = "pdmeds-time-sheet-v1";
 const DAY_PARTS = [
   { name: "Night", start: 0 },
   { name: "Morning", start: 6 },
@@ -36,42 +35,20 @@ function rowHasData(loaded, row) {
   return loaded.names[row].trim() !== "" || loaded.marks[row].some(Boolean);
 }
 
-function loadSheet() {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY));
-    if (!parsed || !Array.isArray(parsed.names) || !Array.isArray(parsed.marks)) return emptySheet();
-    const rows = Math.min(MAX_ROWS, Math.max(MIN_ROWS, parsed.names.length));
-    const loaded = emptySheet(rows);
-    for (let row = 0; row < rows; row += 1) {
-      if (typeof parsed.names[row] === "string") loaded.names[row] = parsed.names[row].slice(0, 60);
-      for (let hour = 0; hour < HOURS; hour += 1) {
-        loaded.marks[row][hour] = Boolean(parsed.marks[row]?.[hour]);
-      }
-    }
-    // Drop empty trailing rows left over from older fixed-size sheets.
-    while (loaded.names.length > DEFAULT_ROWS && !rowHasData(loaded, loaded.names.length - 1)) {
-      loaded.names.pop();
-      loaded.marks.pop();
-    }
-    return loaded;
-  } catch {
-    return emptySheet();
-  }
+// The sheet lives in memory only: every page load starts a fresh, blank
+// session, so no previous patient's schedule lingers on shared
+// workstations. Older versions stored the sheet in localStorage; clear
+// any such leftover data.
+try {
+  window.localStorage.removeItem("pdmeds-time-sheet-v1");
+} catch {
+  // Storage unavailable; nothing to clean.
 }
 
-const sheet = loadSheet();
+const sheet = emptySheet();
 
 function rowCount() {
   return sheet.names.length;
-}
-
-function saveSheet() {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sheet));
-  } catch {
-    // Storage unavailable (private browsing, quota): the sheet still works
-    // for the current visit and for printing.
-  }
 }
 
 const pad = value => String(value).padStart(2, "0");
@@ -133,7 +110,6 @@ function makeNameInput(row) {
   input.setAttribute("aria-label", `Name of medicine ${row + 1}`);
   input.addEventListener("input", () => {
     sheet.names[row] = input.value;
-    saveSheet();
   });
   return input;
 }
@@ -149,7 +125,6 @@ function makeToggle(row, hour, className, label) {
   control.addEventListener("click", () => {
     sheet.marks[row][hour] = !sheet.marks[row][hour];
     control.setAttribute("aria-pressed", String(sheet.marks[row][hour]));
-    saveSheet();
   });
   return control;
 }
@@ -159,7 +134,6 @@ function removeRow(row) {
   if (rowHasData(sheet, row) && !window.confirm(`Remove ${rowLabel(row)} and its marked times?`)) return;
   sheet.names.splice(row, 1);
   sheet.marks.splice(row, 1);
-  saveSheet();
   render();
 }
 
@@ -267,7 +241,6 @@ addMedicineButton.addEventListener("click", () => {
   if (rowCount() >= MAX_ROWS) return;
   sheet.names.push("");
   sheet.marks.push(emptyRowMarks());
-  saveSheet();
   render();
   const inputs = document.querySelectorAll(phoneQuery.matches ? ".med-card .med-name" : ".med-cell .med-name");
   inputs[inputs.length - 1]?.focus();
@@ -419,7 +392,6 @@ document.getElementById("clearSheet").addEventListener("click", () => {
   const fresh = emptySheet();
   sheet.names = fresh.names;
   sheet.marks = fresh.marks;
-  saveSheet();
   render();
 });
 
