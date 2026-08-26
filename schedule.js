@@ -371,11 +371,11 @@ function escapeRtf(value) {
 }
 
 function buildRtf(rows) {
-  const MED_WIDTH = 1700;   // twips
-  const HOUR_WIDTH = 340;
+  const MED_WIDTH = 2000;   // twips; landscape letter leaves ~14400 usable
+  const HOUR_WIDTH = 510;
   const borders = "\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10";
   const rowDefinition = shaded => {
-    let definition = "\\trowd\\trgaph40";
+    let definition = "\\trowd\\trgaph40" + (shaded ? "\\trhdr" : "");
     let edge = MED_WIDTH;
     definition += borders + (shaded ? "\\clcbpat2" : "") + `\\cellx${edge}`;
     for (let hour = 0; hour < HOURS; hour += 1) {
@@ -386,7 +386,8 @@ function buildRtf(rows) {
   };
 
   const parts = [];
-  parts.push("{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fswiss Arial;}}{\\colortbl;\\red0\\green0\\blue0;\\red238\\green238\\blue238;}\\f0\\fs18");
+  parts.push("{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fswiss Arial;}}{\\colortbl;\\red0\\green0\\blue0;\\red238\\green238\\blue238;}");
+  parts.push("\\paperw15840\\paperh12240\\landscape\\margl720\\margr720\\margt720\\margb720\\f0\\fs18");
   const patientName = document.getElementById("patientName").value.trim();
   parts.push(`{\\b\\fs24 PD Medication Schedule}${patientName ? ` \\endash  ${escapeRtf(patientName)}` : ""}\\par\\par`);
   parts.push(rowDefinition(true));
