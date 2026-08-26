@@ -324,15 +324,49 @@ function buildEpicHtml(rows) {
   return parts.join("");
 }
 
+// Plain-text flavor: a compact aligned grid in the style of Epic's own
+// SmartLink tables, using only the hours that have marked doses. This is
+// what Epic's classic note editor receives on direct paste (it reads only
+// RTF and plain text from the clipboard, and browsers cannot write RTF).
 function buildEpicText(rows) {
-  const lines = ["PD Medication Schedule"];
-  for (const row of rows) {
-    const times = [];
-    for (let hour = 0; hour < HOURS; hour += 1) {
-      if (sheet.marks[row][hour]) times.push(hourText(hour));
-    }
-    lines.push(`${rowLabel(row)}: ${times.length ? times.join(", ") : "no times marked"}`);
+  const hoursUsed = [];
+  for (let hour = 0; hour < HOURS; hour += 1) {
+    if (rows.some(row => sheet.marks[row][hour])) hoursUsed.push(hour);
   }
+  const shortLabel = hour => {
+    if (!clock12) return `${pad(hour)}:00`;
+    const { time, suffix } = hour12Parts(hour);
+    return `${time}${suffix[0]}`;
+  };
+
+  const lines = ["PD Medication Schedule", ""];
+  if (!hoursUsed.length) {
+    for (const row of rows) lines.push(`${rowLabel(row)}: no times marked`);
+    return lines.join("\n");
+  }
+
+  const nameWidth = Math.min(24, Math.max(10, ...rows.map(row => rowLabel(row).length)));
+  const columns = hoursUsed.map(hour => ({ hour, label: shortLabel(hour) }));
+  const cell = (content, width) => {
+    const left = Math.floor((width - content.length) / 2);
+    return " ".repeat(Math.max(0, left)) + content + " ".repeat(Math.max(0, width - content.length - left));
+  };
+
+  let header = "Medication".padEnd(nameWidth);
+  let rule = "-".repeat(nameWidth);
+  for (const column of columns) {
+    header += ` | ${column.label}`;
+    rule += `-+-${"-".repeat(column.label.length)}`;
+  }
+  lines.push(header, rule);
+  for (const row of rows) {
+    let line = rowLabel(row).slice(0, nameWidth).padEnd(nameWidth);
+    for (const column of columns) {
+      line += ` | ${cell(sheet.marks[row][column.hour] ? "X" : "", column.label.length)}`;
+    }
+    lines.push(line);
+  }
+  lines.push("", "X marks a scheduled dose time.");
   return lines.join("\n");
 }
 
@@ -353,81 +387,6 @@ function copyViaSelection(html) {
   holder.remove();
   return copied;
 }
-
-/* ---------- Download for Word (RTF bridge for Epic's classic editor) ----------
-   Epic's classic note editor pastes RTF, not HTML, and browsers cannot write
-   RTF to the clipboard. Word can: this button downloads the schedule as a
-   real RTF table so the user can open it in Word, copy, and paste into Epic. */
-
-function escapeRtf(value) {
-  let out = "";
-  for (const ch of String(value)) {
-    const code = ch.codePointAt(0);
-    if (ch === "\\" || ch === "{" || ch === "}") out += "\\" + ch;
-    else if (code < 128) out += ch;
-    else out += `\\u${code > 32767 ? code - 65536 : code}?`;
-  }
-  return out;
-}
-
-function buildRtf(rows) {
-  const MED_WIDTH = 1700;   // twips
-  const HOUR_WIDTH = 340;
-  const borders = "\\clbrdrt\\brdrs\\brdrw10\\clbrdrl\\brdrs\\brdrw10\\clbrdrb\\brdrs\\brdrw10\\clbrdrr\\brdrs\\brdrw10";
-  const rowDefinition = shaded => {
-    let definition = "\\trowd\\trgaph40";
-    let edge = MED_WIDTH;
-    definition += borders + (shaded ? "\\clcbpat2" : "") + `\\cellx${edge}`;
-    for (let hour = 0; hour < HOURS; hour += 1) {
-      edge += HOUR_WIDTH;
-      definition += borders + (shaded ? "\\clcbpat2" : "") + `\\cellx${edge}`;
-    }
-    return definition;
-  };
-
-  const parts = [];
-  parts.push("{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fswiss Arial;}}{\\colortbl;\\red0\\green0\\blue0;\\red238\\green238\\blue238;}\\f0\\fs18");
-  const patientName = document.getElementById("patientName").value.trim();
-  parts.push(`{\\b\\fs24 PD Medication Schedule}${patientName ? ` \\endash  ${escapeRtf(patientName)}` : ""}\\par\\par`);
-  parts.push(rowDefinition(true));
-  parts.push("\\pard\\intbl\\ql{\\b\\fs16 Medication}\\cell");
-  for (let hour = 0; hour < HOURS; hour += 1) {
-    parts.push(`\\pard\\intbl\\qc{\\b\\fs14 ${clock12 ? hourText(hour) : pad(hour)}}\\cell`);
-  }
-  parts.push("\\row");
-  for (const row of rows) {
-    parts.push(rowDefinition(false));
-    parts.push(`\\pard\\intbl\\ql{\\fs16 ${escapeRtf(rowLabel(row))}}\\cell`);
-    for (let hour = 0; hour < HOURS; hour += 1) {
-      parts.push(`\\pard\\intbl\\qc{\\b\\fs16 ${sheet.marks[row][hour] ? "X" : ""}}\\cell`);
-    }
-    parts.push("\\row");
-  }
-  parts.push("\\pard\\par ");
-  parts.push(clock12
-    ? "X marks a scheduled dose time."
-    : "Hours are 24-hour clock (00 = midnight, 12 = noon). X marks a scheduled dose time.");
-  parts.push("\\par}");
-  return parts.join("\n");
-}
-
-document.getElementById("downloadWord").addEventListener("click", () => {
-  const rows = rowsWithData();
-  if (!rows.length) {
-    setCopyStatus("Nothing to download yet — name a medicine or mark a time first.");
-    return;
-  }
-  const blob = new Blob([buildRtf(rows)], { type: "application/rtf" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = "PD-Medication-Schedule.rtf";
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-  setCopyStatus("Word file downloaded. Open it, press Ctrl+A then Ctrl+C, and paste into Epic.");
-});
 
 document.getElementById("copyEpic").addEventListener("click", async () => {
   const rows = rowsWithData();
