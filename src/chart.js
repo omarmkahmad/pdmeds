@@ -86,7 +86,8 @@ export function chartGeometry(width, { printing = false } = {}) {
   const box = Math.floor(printing ? PRINT_WIDTH : Number(width) || 0);
   const w = Math.max(120, box);
   const compact = w < COMPACT_BELOW;
-  const height = compact ? 260 : Math.round(Math.min(380, Math.max(300, 0.45 * w)));
+  // Print keeps the chart short so the whole summary fits one Letter page.
+  const height = compact || printing ? 260 : Math.round(Math.min(380, Math.max(300, 0.45 * w)));
   const margin = compact
     ? { left: 36, right: 8, top: 10, bottom: 46 }
     : { left: 42, right: 84, top: 12, bottom: 48 };

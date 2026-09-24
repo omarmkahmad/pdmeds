@@ -120,7 +120,8 @@ test("print geometry is 720 px wide whatever the box", () => {
   const print = chartGeometry(300, { printing: true });
   assert.equal(print.width, PRINT_WIDTH);
   assert.equal(print.compact, false);
-  assert.equal(print.height, 324);
+  // Short, so the whole printed summary fits one Letter page.
+  assert.equal(print.height, 260);
 });
 
 test("hour labels: 00:00 anchored at the start and 24:00 at the end of the plot", () => {
@@ -406,7 +407,7 @@ test("scene: the total and statistics are unaffected by highlight", () => {
 test("scene: printing draws 720 px wide, without cursor or highlight", () => {
   const { root, info } = buildChartScene(regimen, { printing: true, cursorMinute: 540, highlightId: "d1" }, 334);
   assert.equal(root.attrs.width, 720);
-  assert.equal(root.attrs.viewBox, "0 0 720 324");
+  assert.equal(root.attrs.viewBox, "0 0 720 260");
   assert.match(root.attrs.class, /\bprinting\b/);
   assert.equal(byClass(root, "chart-cursor").length, 0);
   assert.equal(byClass(root, "chart-cursor-rule").length, 0);

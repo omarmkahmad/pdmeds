@@ -622,13 +622,25 @@ th { color: var(--muted); font-size: 13px; }
   .doses-card { display: none; }
   #resultsBody { padding: 0; }
   .results-card .card-head { display: none; }
-  .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
-  .tile { padding: 4px 6px; background: #ffffff; }
-  .tile-value { font-size: 14pt; }
+  /* Tiles print as one compact line of label-value pairs. */
+  .tiles { display: flex; flex-wrap: wrap; gap: 2px 18px; margin: 4px 0 0; }
+  .tile { display: flex; align-items: baseline; gap: 6px; padding: 0; border: 0; background: none; }
+  .tile dt { color: var(--ink); font-size: 10pt; }
+  .tile dd { display: inline; }
+  .tile-value { display: inline; font-size: 11pt; }
+  .tile-note, .tile-was { display: none; }
+  .headline p { margin: 0 0 2px; font-size: 10.5pt; }
+  .results-card h3 { margin: 8px 0 2px; font-size: 12pt; }
+  .unit-line, .repeat-line { margin: 0; font-size: 9.5pt; }
+  .chart-key { margin: 2px 0 4px; font-size: 9pt; }
+  th, td { padding: 2px 6px; }
+  caption { padding: 4px 0 2px; font-size: 10.5pt; }
+  .table-notes p, .range-lists p { margin: 2px 0; font-size: 9.5pt; }
   .chart, table, .tiles { break-inside: avoid; }
   .chart { min-height: 0; }
   #printHeader h2 { margin: 0; font-size: 16pt; }
   #printHeader p, #printDoses p { margin: 2px 0; font-size: 10pt; }
   #printDoses table { margin: 6px 0; font-size: 9.5pt; }
-  .site-footer { margin: 8px 0 0; padding: 0; border: 0; font-size: 9pt; }
+  .site-footer { margin: 4px 0 0; padding: 0; border: 0; font-size: 8.5pt; }
+  .site-footer p { margin: 0; }
 }

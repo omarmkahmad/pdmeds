@@ -962,7 +962,7 @@ function renderAnswerBar(compare) {
   els.barLedd.textContent = `LEDD ${formatNumber(totals.led)} mg/day`;
   const low = analysis.stats.lowestBefore;
   let text = low
-    ? `Lowest before a dose: ${formatNumber(Math.round(low.level), 0)} at ${formatClock(low.minute)} ↓`
+    ? `Dips to ${formatNumber(Math.round(low.level), 0)} at ${formatClock(low.minute)} ↓`
     : `Lowest: ${formatNumber(Math.round(analysis.stats.min), 0)} at ${formatClock(analysis.stats.minMinute)} ↓`;
   if (compare && low && ui.pinned?.lowestBefore && Math.round(ui.pinned.lowestBefore.level) !== Math.round(low.level)) {
     text = text.replace(" ↓", ` (was ${formatNumber(Math.round(ui.pinned.lowestBefore.level), 0)}) ↓`);
@@ -1421,14 +1421,12 @@ function fillPrint() {
     }
   }
   const totals = dailyTotals(state.doses);
-  const total = document.createElement("p");
-  total.textContent = `Daily total: ${formatNumber(totals.mg)} mg levodopa = ${formatNumber(totals.led)} mg LEDD/day`;
-  const lines = document.createElement("p");
   const parts = [];
   if (state.lines.target !== null) parts.push(`Target line ${formatNumber(state.lines.target)}`);
   if (state.lines.high !== null) parts.push(`High line ${formatNumber(state.lines.high)}`);
-  lines.textContent = parts.length ? parts.join(" · ") : "No lines set";
-  els.printDoses.append(table, total, lines);
+  const total = document.createElement("p");
+  total.textContent = `Daily total: ${formatNumber(totals.mg)} mg levodopa = ${formatNumber(totals.led)} mg LEDD/day · ${parts.length ? parts.join(" · ") : "No lines set"}`;
+  els.printDoses.append(table, total);
   if (analysis && chart) {
     chart.draw(analysis, { cursorMinute: ui.cursorMinute, pinnedTotal: ui.pinned?.total ?? null, highlightId: null, printing: true });
   }
