@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check app.js && node --check schedule.js && node --check src/drugs.js && node --check src/model.js",
+    "check": "node --check app.js && node --check schedule.js && for f in src/*.js; do node --check \"$f\" || exit 1; done",
     "test": "node --test",
     "validate": "npm run check && npm test"
   }

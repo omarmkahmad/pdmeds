@@ -14,6 +14,10 @@
   <link rel="stylesheet" href="schedule.css">
 </head>
 <body>
+  <nav class="page-nav" aria-label="Pages">
+    <a href="index.html">Explorer</a>
+    <a href="schedule.html" aria-current="page">Dose time sheet</a>
+  </nav>
   <main class="sheet">
     <header class="sheet-header">
       <h1>PD Medication Schedule</h1>
@@ -22,6 +26,8 @@
         <input type="text" id="patientName" maxlength="80" autocomplete="off">
       </div>
     </header>
+
+    <p class="sheet-status" id="sheetStatus" role="status"></p>
 
     <div class="toolbar">
       <button class="button" type="button" id="printSheet">Print this sheet</button>

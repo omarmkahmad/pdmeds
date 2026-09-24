@@ -1,0 +1,9 @@
+{
+  "doses": [
+    { "t": "08:00", "drug": "sinemet", "dose": 100, "dur": 960 },
+    { "t": "20:00", "drug": "inbrija", "dose": 84 }
+  ],
+  "onThr": 40,
+  "dysThr": null,
+  "days": 1
+}

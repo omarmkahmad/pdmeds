@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "modelVersion": "3.1.0",
+  "exportedAt": "2026-09-24T15:30:00.000Z",
+  "doses": [
+    { "time": "07:00", "drug": "sinemet", "dose": 150, "strength": "25/250", "count": 1 },
+    { "time": "10:00", "drug": "crexont", "dose": 420, "strength": "61.25/245", "count": 2 },
+    { "time": "13:00", "drug": "sinemetcr", "dose": 150, "strength": "25/100", "count": 1.5 },
+    { "time": "16:00", "drug": "rytary", "dose": 150, "strength": "61.25/245", "count": 1 },
+    { "time": "19:00", "drug": "inbrija", "dose": 84, "strength": "42", "count": 1 }
+  ],
+  "onThreshold": null,
+  "dyskinesiaThreshold": null
+}

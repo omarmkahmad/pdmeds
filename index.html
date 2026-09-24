@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Educational visualization of modeled Parkinson medication exposure and levodopa-equivalent daily dose.">
+  <meta name="description" content="See how a day of levodopa doses adds up, hour by hour. A teaching model, not dosing advice.">
   <meta name="theme-color" content="#004477">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-title" content="PD Meds">
@@ -14,152 +14,230 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
-  <div class="page-shell">
-    <header class="site-header">
-      <div>
-        <p class="eyebrow">Parkinson medication modeling</p>
-        <h1>PD Medication Exposure Explorer</h1>
-        <p class="subtitle">Compare a daily schedule using normalized exposure curves and current levodopa-equivalent dose proposals.</p>
-      </div>
-      <div class="header-meta">
-        <span class="warning-badge">Educational estimate — not dosing guidance</span>
-        <span class="version-badge" id="modelVersion"></span>
-      </div>
-    </header>
-
-    <main id="main">
-      <section class="card" aria-labelledby="regimenTitle">
-        <div class="card-header">
-          <div>
-            <h2 id="regimenTitle">Daily regimen</h2>
-            <p>Dose means the active drug amount. For combination levodopa products, enter the levodopa component only.</p>
-          </div>
-          <span class="example-badge" id="exampleBadge" hidden>Example data</span>
-        </div>
-        <div class="card-body">
-          <div class="table-scroll" role="region" aria-label="Medication regimen table" tabindex="0">
-            <table class="regimen-table">
-              <caption class="sr-only">Daily Parkinson medication doses</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Time</th>
-                  <th scope="col">Medication</th>
-                  <th scope="col">Dose (mg)</th>
-                  <th scope="col">LEDD contribution</th>
-                  <th scope="col"><span class="sr-only">Curve</span></th>
-                  <th scope="col"><span class="sr-only">Remove</span></th>
-                </tr>
-              </thead>
-              <tbody id="regimenBody"></tbody>
-            </table>
-          </div>
-
-          <div class="button-row">
-            <button class="button button-primary" type="button" id="addDose">Add dose</button>
-            <button class="button" type="button" id="loadExample">Load example</button>
-            <button class="button" type="button" id="clearRegimen">Clear regimen</button>
-          </div>
-
-          <fieldset class="settings">
-            <legend>Model settings</legend>
-            <div class="field">
-              <label for="onThreshold">Target-zone threshold <span>(relative units)</span></label>
-              <input type="number" id="onThreshold" min="0" max="20000" step="5" inputmode="decimal" placeholder="e.g. 50">
-            </div>
-            <div class="field">
-              <label for="dyskinesiaThreshold">High-exposure threshold <span>(relative units)</span></label>
-              <input type="number" id="dyskinesiaThreshold" min="0" max="20000" step="5" inputmode="decimal" placeholder="e.g. 120">
-            </div>
-          </fieldset>
-          <p class="form-message" id="formMessage" role="alert"></p>
-          <p class="hint">The schedule is treated as repeating every day, so last night’s doses carry into the morning. Thresholds are optional and user-defined; they are not validated clinical On/Off or dyskinesia cutoffs.</p>
-        </div>
-      </section>
-
-      <section class="card" aria-labelledby="chartTitle">
-        <div class="card-header">
-          <div>
-            <h2 id="chartTitle">Modeled exposure over 24 hours</h2>
-            <p>Relative normalized exposure index—not a measured plasma concentration or direct prediction of clinical effect.</p>
-          </div>
-        </div>
-        <div class="readout" aria-live="polite" aria-atomic="true">
-          <div><span class="readout-label">Time</span><strong id="readoutTime">—</strong></div>
-          <div><span class="readout-label">Relative exposure</span><strong id="readoutValue">—</strong></div>
-          <div><span class="readout-label">User-defined zone</span><strong class="zone-readout" id="readoutZone">Unclassified</strong></div>
-        </div>
-        <p class="contributions" id="readoutContributions"></p>
-        <div id="chartBox" class="chart-box"></div>
-        <div class="chart-control">
-          <label for="timeSlider">Explore time: <output id="sliderTime" for="timeSlider">00:00</output></label>
-          <input type="range" id="timeSlider" min="0" max="1439" step="1" value="0">
-          <p class="hint">Use the slider or Left/Right arrow keys for minute-by-minute values. Page Up/Down moves by one hour.</p>
-        </div>
-        <div class="legend" id="legend" role="group" aria-label="Show or hide medication curves"></div>
-      </section>
-
-      <section class="card" aria-labelledby="statisticsTitle">
-        <div class="card-header"><h2 id="statisticsTitle">Summary</h2></div>
-        <div class="card-body">
-          <div class="stats" id="statistics"></div>
-          <p class="hint">LEDD is a research comparison measure. The remaining values come from this simplified exposure model and should not guide medication changes.</p>
-        </div>
-      </section>
-
-      <details>
-        <summary>Save or load a regimen</summary>
-        <div class="details-body">
-          <p>Exports include a schema version and model version so saved regimens can be interpreted after the model changes.</p>
-          <label class="sr-only" for="regimenJson">Regimen JSON</label>
-          <textarea id="regimenJson" spellcheck="false" placeholder="Export a regimen or paste regimen JSON here"></textarea>
-          <div class="button-row">
-            <button class="button" type="button" id="exportJson">Prepare JSON</button>
-            <button class="button" type="button" id="copyJson">Copy JSON</button>
-            <button class="button" type="button" id="downloadJson">Download JSON</button>
-            <button class="button button-primary" type="button" id="importJson">Load JSON</button>
-          </div>
-          <p class="form-message" id="jsonMessage" role="status" aria-live="polite"></p>
-        </div>
-      </details>
-
-      <details>
-        <summary>Medication parameters and sources</summary>
-        <div class="details-body">
-          <p>LEDD conversion and exposure-curve shape are stored separately. Component curves are normalized so their integrated area matches the declared exposure factor. “Consensus proposal” does not mean clinically validated equivalence for an individual patient.</p>
-          <div class="table-scroll" role="region" aria-label="Medication parameter table" tabindex="0">
-            <table class="parameter-table">
-              <thead>
-                <tr>
-                  <th scope="col">Medication</th>
-                  <th scope="col">LEDD formula</th>
-                  <th scope="col">Exposure model</th>
-                  <th scope="col">Evidence/source</th>
-                </tr>
-              </thead>
-              <tbody id="parameterBody"></tbody>
-            </table>
-          </div>
-          <p><strong>Not included:</strong> the model covers five levodopa preparations (Sinemet, Sinemet CR, Rytary, Crexont, and Inbrija). Other Parkinson medications — levodopa infusions, dopamine agonists, MAO-B inhibitors, COMT inhibitors, and adjuncts — remain outside the graph even when a research LED proposal exists.</p>
-        </div>
-      </details>
-
-      <details>
-        <summary>Model assumptions and limitations</summary>
-        <div class="details-body prose">
-          <p><strong>Exposure shapes.</strong> Oral and inhaled doses use a simplified linear rise to a peak followed by exponential elimination. Extended-release products use multiple components. Component areas are normalized to a declared exposure factor.</p>
-          <p><strong>Important omissions.</strong> Absorption lag, protein and meal effects, gastroparesis, renal/hepatic function, endogenous dopamine, drug interactions, rescue-dose context, and person-to-person variability are not modeled. Pharmacokinetics is not pharmacodynamics.</p>
-          <p><strong>Primary conversion reference.</strong> Jost ST et al. <a href="https://movementdisorders.onlinelibrary.wiley.com/doi/10.1002/mds.29410" target="_blank" rel="noopener noreferrer">Levodopa Dose Equivalency in Parkinson’s Disease: Updated Systematic Review and Proposals</a>. Movement Disorders. 2023.</p>
-        </div>
-      </details>
-    </main>
-
-    <footer class="site-footer">
-      <p>Population-level educational model. Do not start, stop, or change medication based on this tool. Discuss medication decisions with a qualified clinician.</p>
-      <p>This site runs entirely in your browser and does not transmit regimen data.</p>
-    </footer>
+  <div class="skip-links">
+    <a class="skip-link" href="#doses">Skip to doses</a>
+    <a class="skip-link" href="#results">Skip to results</a>
   </div>
-  <noscript>This tool requires JavaScript to calculate and draw exposure curves.</noscript>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <h1>PD Medication Exposure Explorer</h1>
+      <nav class="page-nav" aria-label="Pages">
+        <a href="index.html" aria-current="page">Explorer</a>
+        <a href="schedule.html">Dose time sheet</a>
+      </nav>
+      <p class="caution-line">A teaching model of average patients. Not for dosing decisions. <a href="#limits" id="howItWorksLink">How it works</a></p>
+    </div>
+  </header>
+
+  <main id="main" class="layout">
+    <div class="print-only print-summary">
+      <div id="printHeader"></div>
+      <div id="printDoses"></div>
+    </div>
+    <section id="doses" class="card doses-card" aria-labelledby="dosesTitle">
+      <div class="card-head">
+        <h2 id="dosesTitle">Doses</h2>
+        <span class="dose-count" id="doseCount"></span>
+        <span class="badge" id="exampleBadge" hidden>Example</span>
+      </div>
+      <p class="intro">Pick the tablet or capsule and how many. The app works out the levodopa mg.</p>
+
+      <div class="empty-state" id="emptyDoses">
+        <p>No doses yet. Add the first dose, or try an example to see how it works.</p>
+        <div class="button-row">
+          <button class="button primary" type="button" id="addFirst">Add first dose</button>
+          <button class="button" type="button" id="tryExample">Try an example</button>
+        </div>
+      </div>
+
+      <ol class="dose-list" id="doseList" aria-labelledby="dosesTitle"></ol>
+
+      <button class="button add-wide" type="button" id="addDoseWide" hidden>+ Add dose</button>
+
+      <div class="daily-total" id="dailyTotal" hidden>
+        <span class="daily-total-label">Daily total</span>
+        <span class="daily-total-value"><span id="dailyTotalText"></span> <button class="info" type="button" data-tip="totalLedd" aria-label="About total LEDD" aria-expanded="false" aria-controls="tip-totalLedd">i</button></span>
+        <div class="tip" id="tip-totalLedd" role="status"></div>
+      </div>
+
+      <div class="tools-row" id="toolsRow" hidden>
+        <button class="link-button" type="button" id="makeSheet">Make a dose time sheet</button>
+        <button class="link-button danger" type="button" id="clearAll">Clear all</button>
+      </div>
+      <p class="tool-message" id="sheetMessage" role="status"></p>
+
+      <div class="dock" id="dock">
+        <div class="undo-bar" id="undoBar" role="status">
+          <span id="undoMessage"></span>
+          <span class="undo-actions" id="undoActions" hidden>
+            <button class="button small" type="button" id="undoButton">Undo</button>
+            <button class="link-button" type="button" id="dismissUndo">Dismiss</button>
+          </span>
+        </div>
+        <div class="answer-bar" id="answerBar" hidden>
+          <a class="answer-link" href="#results" id="answerLink">
+            <span class="answer-ledd" id="barLedd"></span>
+            <span class="answer-low" id="barLow"></span>
+          </a>
+          <button class="button primary add-bar" type="button" id="addDoseBar" aria-label="Add dose"><span class="add-long" aria-hidden="true">+ Add dose</span><span class="add-short" aria-hidden="true">+ Add</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="results" class="card results-card" aria-labelledby="resultsTitle">
+      <div class="card-head">
+        <h2 id="resultsTitle" tabindex="-1">Your day</h2>
+        <button class="button small" type="button" id="pinButton" aria-pressed="false" hidden>Pin to compare</button>
+      </div>
+      <p class="empty-state" id="resultsEmpty">Your day will appear here. Add a dose to see when the level dips, how high it goes, and the daily LEDD.</p>
+
+      <div id="resultsBody" hidden>
+        <div class="headline" id="headline"></div>
+        <p class="pinned-note" id="pinnedNote" hidden>Comparing with the day you pinned (grey dashed line).</p>
+        <p class="compare-sentence" id="compareSentence" hidden></p>
+
+        <dl class="tiles" id="tiles"></dl>
+        <div class="tip tile-tip" id="tip-tiles" role="status"></div>
+
+        <h3 id="chartTitle">Levodopa level over a typical day</h3>
+        <p class="unit-line">100 = the peak from one 100 mg immediate-release levodopa dose (e.g. one Sinemet 25/100 tablet). <button class="info" type="button" data-tip="level" aria-label="About the level" aria-expanded="false" aria-controls="tip-level">i</button></p>
+        <div class="tip" id="tip-level" role="status"></div>
+        <p class="repeat-line">The day repeats, so midnight includes what is left from last night’s doses.</p>
+        <p class="readout" id="readout"></p>
+        <div class="chart" id="chart" data-labelledby="chartTitle" data-describedby="chartDesc"></div>
+        <p class="sr-only" id="chartDesc"></p>
+        <div class="slider-wrap" id="sliderWrap">
+          <label for="timeSlider">Time on chart</label>
+          <input type="range" id="timeSlider" min="0" max="1435" step="5" value="0" aria-describedby="sliderHint">
+          <p class="hint" id="sliderHint"></p>
+        </div>
+        <ul class="chart-key" id="chartKey" aria-label="Chart key"></ul>
+
+        <div class="table-wrap">
+          <table class="before-table" id="beforeTable">
+            <caption>Level before each dose</caption>
+            <thead>
+              <tr>
+                <th scope="col">Dose</th>
+                <th scope="col">Before</th>
+                <th scope="col">Since last dose</th>
+                <th scope="col">Peak after</th>
+              </tr>
+            </thead>
+            <tbody id="beforeBody"></tbody>
+          </table>
+        </div>
+        <div class="table-notes" id="beforeNotes"></div>
+        <div class="range-lists" id="rangeLists"></div>
+
+        <details class="inline-details" id="linesDetails">
+          <summary id="linesSummary">Your own lines (optional)</summary>
+          <div class="details-body">
+            <p>Draw your own lines to see how long the level sits below or above them. These are your guesses, not measured cutoffs.</p>
+            <div class="line-fields">
+              <div class="field" id="targetField">
+                <label for="targetInput">Target line <button class="info" type="button" data-tip="target" aria-label="About the target line" aria-expanded="false" aria-controls="tip-target">i</button></label>
+                <input type="text" id="targetInput" inputmode="decimal" autocomplete="off" aria-describedby="targetHint targetError">
+                <p class="hint" id="targetHint">A level you think this person needs to feel ON.</p>
+                <p class="field-error" id="targetError"></p>
+                <div class="tip" id="tip-target" role="status"></div>
+              </div>
+              <div class="field" id="highField">
+                <label for="highInput">High line <button class="info" type="button" data-tip="high" aria-label="About the high line" aria-expanded="false" aria-controls="tip-high">i</button></label>
+                <input type="text" id="highInput" inputmode="decimal" autocomplete="off" aria-describedby="highHint highError highNote">
+                <p class="hint" id="highHint">A level above which you think dyskinesia may start.</p>
+                <p class="field-error" id="highError"></p>
+                <p class="field-note" id="highNote"></p>
+                <div class="tip" id="tip-high" role="status"></div>
+              </div>
+            </div>
+            <button class="button small" type="button" id="removeLines">Remove lines</button>
+          </div>
+        </details>
+
+        <details class="inline-details">
+          <summary>How to read this chart</summary>
+          <div class="details-body prose">
+            <ol class="read-list">
+              <li>The thick black line is the modeled levodopa level from all doses added together. Thin coloured lines are single doses, and ▲ marks when each is taken.</li>
+              <li>100 is the peak from one 100 mg immediate-release dose, such as one Sinemet 25/100 tablet. 200 is about twice that.</li>
+              <li>Levodopa leaves the blood fast: about half is gone in 1½ hours (Nutt 2008). So immediate-release doses rise and fall sharply, and extended-release products spread the level out.</li>
+              <li>In later PD, symptoms follow the level more closely. Wearing-off tends to line up with low points, and peak-dose dyskinesia with high points. Some dyskinesia comes at low levels instead (Contin 2010). Early in PD, a long-duration response that builds over weeks smooths out the dips (Nutt 2008).</li>
+              <li>In advanced PD, the body’s response trails the blood level by roughly half an hour (Mao 2013), so symptoms come a little after the times shown. Early in PD the lag is much longer. Meals, protein and stomach emptying also shift real levels.</li>
+            </ol>
+          </div>
+        </details>
+
+        <details class="inline-details" id="hourDetails">
+          <summary>Hour-by-hour table</summary>
+          <div class="details-body">
+            <div class="table-wrap">
+              <table class="hour-table" id="hourTable">
+                <caption>Level at the start of each hour</caption>
+                <thead id="hourHead"></thead>
+                <tbody id="hourBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <div class="secondary">
+      <details id="fileDetails">
+        <summary>Save or open a schedule file</summary>
+        <div class="details-body">
+          <p>Save this schedule as a small file on your device. Nothing is uploaded.</p>
+          <div class="button-row">
+            <button class="button" type="button" id="saveFile">Save file</button>
+            <button class="button" type="button" id="openFile">Open file…</button>
+            <input type="file" id="fileInput" accept=".json,application/json" hidden>
+          </div>
+          <details class="nested-details">
+            <summary>Paste file text instead</summary>
+            <div class="details-body">
+              <label for="pasteText">File text</label>
+              <textarea id="pasteText" spellcheck="false" autocomplete="off"></textarea>
+              <button class="button" type="button" id="openPasted">Open pasted text</button>
+            </div>
+          </details>
+          <div class="file-messages" id="fileMessages" role="status" tabindex="-1"></div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Medicines, strengths and sources</summary>
+        <div class="details-body">
+          <div class="drug-cards" id="drugCards"></div>
+          <p>This covers five levodopa products. Levodopa infusions, dopamine agonists, MAO-B inhibitors, COMT inhibitors and other add-on medicines are not shown on the chart.</p>
+        </div>
+      </details>
+
+      <details id="limits">
+        <summary>How this works and its limits</summary>
+        <div class="details-body prose">
+          <p>Doses are added together over a day that repeats. Each product has a simple modeled shape: a rise to a peak, then a fall. Extended-release products add a slower second part. The shapes are fitted to published single-dose studies in people with advanced PD, and the size of each curve follows how much levodopa reaches the blood compared with an immediate-release tablet.</p>
+          <p>Not modeled: meals and protein, slow stomach emptying, kidney and liver function, drug interactions, and differences between people.</p>
+          <p>The chart shows modeled blood levels, not how a person moves. The body’s response trails the level by roughly half an hour in advanced PD, and the level each person needs changes as PD advances (Mao 2013; Contin 2010).</p>
+          <p>Blood-level studies report ng/mL. For example, Wach 2026 cites a range of about 750–1000 ng/mL. Those studies used different people and methods, so treat any conversion to this chart’s scale as rough.</p>
+          <p>LEDD uses the consensus conversion factors of Jost 2023. Crexont was approved after that review, so its factor (×0.5, the Rytary factor) is an assumption; its label switches from Rytary at about 1:1 by levodopa mg.</p>
+          <h4>References</h4>
+          <ol class="references" id="references"></ol>
+        </div>
+      </details>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p class="footer-caution">For learning only. This models average patients and does not predict how one person will respond. Do not start, stop, or change medication based on it. Discuss medication decisions with a qualified clinician.</p>
+    <p>Runs entirely in your browser. Nothing you enter is sent or saved.</p>
+    <p><span id="footerVersion"></span> · <a href="schedule.html">Dose time sheet</a></p>
+  </footer>
+
+  <p class="sr-only" id="statusRegion" aria-live="polite"></p>
+
+  <noscript>This tool needs JavaScript to add up doses and draw the chart.</noscript>
   <script type="module" src="app.js"></script>
 </body>
 </html>
