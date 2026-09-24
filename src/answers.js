@@ -362,6 +362,15 @@ function pinnedAbove(snapshot, high) {
   return snapshot?.total && high !== null ? countMinutes(snapshot.total, value => value >= high) : null;
 }
 
+const hasOvernightGap = analysis => Boolean(analysis?.before?.some(row => row.overnight));
+
+// With an overnight gap, the lowest before a dose leaves out the first dose
+// of the day, so the name says so. Otherwise "Lowest before a dose" read as
+// a contradiction next to a lower "Lowest" before that first dose.
+export function lowestBeforeLabel(analysis) {
+  return hasOvernightGap(analysis) ? "Daytime low" : "Lowest before a dose";
+}
+
 function lowestBeforeNote(row) {
   if (!row) return "Needs 2 or more dose times.";
   if (row.early) return `at ${formatClock(row.minute)}, before the ${formatClock(row.groupStart)} dose`;
@@ -374,7 +383,7 @@ export function tileModel(analysis, pinned = null) {
   const tiles = [
     {
       key: "lowestBefore",
-      label: "Lowest before a dose",
+      label: lowestBeforeLabel(analysis),
       value: low ? levelText(low.level) : "—",
       note: lowestBeforeNote(low),
       info: null
@@ -626,10 +635,22 @@ export function statusMessage(analysis, count) {
   if (!analysis?.doses?.length) return `Updated. ${countText}.`;
   const { stats, totals } = analysis;
   const low = stats.lowestBefore
-    ? `Lowest before a dose ${levelText(stats.lowestBefore.level)} at ${formatClock(stats.lowestBefore.minute)}.`
+    ? `${lowestBeforeLabel(analysis)} ${levelText(stats.lowestBefore.level)} at ${formatClock(stats.lowestBefore.minute)}.`
     : `Lowest ${levelText(stats.min)} at ${formatClock(stats.minMinute)}.`;
   return `Updated. ${countText}, ${formatNumber(totals.mg)} mg levodopa = ${formatNumber(totals.led)} mg LEDD a day. `
     + `${low} Highest ${levelText(stats.max)} at ${formatClock(stats.maxMinute)}.`;
+}
+
+// The second line of the phone answer bar. It has about 155 px on a 360 px
+// screen, so the "was" form drops the time; the tiles still show it.
+export function answerBarLow(analysis, pinned = null) {
+  const { stats } = analysis;
+  const low = stats.lowestBefore;
+  if (!low) return `Lowest: ${levelText(stats.min)} at ${formatClock(stats.minMinute)} ↓`;
+  if (pinned?.lowestBefore && Math.round(pinned.lowestBefore.level) !== Math.round(low.level)) {
+    return `Dips to ${levelText(low.level)} (was ${levelText(pinned.lowestBefore.level)}) ↓`;
+  }
+  return `Dips to ${levelText(low.level)} at ${formatClock(low.minute)} ↓`;
 }
 
 /* ---------- Dose time sheet rows (SPEC 7.3) ---------- */

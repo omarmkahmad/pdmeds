@@ -5,6 +5,7 @@ import { computeDay, formatDuration } from "../src/model.js";
 import { formatClock, formatNumber } from "../src/time.js";
 import {
   analyzeDay,
+  answerBarLow,
   beforeEachDose,
   buildSheetRows,
   chartDesc,
@@ -12,6 +13,7 @@ import {
   doseGroups,
   headlineSentences,
   hourlyRows,
+  lowestBeforeLabel,
   pinSnapshot,
   rangeLabel,
   rangeText,
@@ -407,7 +409,7 @@ test("tiles: four with no lines, labels, info keys and formats", () => {
   const tiles = tileModel(analysis);
   const { stats } = analysis;
   assert.deepEqual(tiles.map(tile => [tile.key, tile.label, tile.info]), [
-    ["lowestBefore", "Lowest before a dose", null],
+    ["lowestBefore", "Daytime low", null],
     ["lowest", "Lowest", "lowest"],
     ["highest", "Highest", "highest"],
     ["fluctuation", "Fluctuation index", "fluctuation"]
@@ -424,6 +426,37 @@ test("tiles: four with no lines, labels, info keys and formats", () => {
   assert.match(tiles[3].value, /^\d+\.\d$/);
   assert.equal(tiles[3].note, "bigger number = bigger swings");
   assert.ok(tiles.every(tile => !("was" in tile)));
+});
+
+test("the first tile is named for what it counts", () => {
+  // With an overnight gap it leaves out the first dose, whose lower level is the "Lowest" tile.
+  const analysis = analyzeDay(TEST_REGIMEN);
+  assert.equal(lowestBeforeLabel(analysis), "Daytime low");
+  assert.ok(analysis.stats.min < analysis.stats.lowestBefore.level);
+  // Every 4 h around the clock: no overnight gap, so every dose counts.
+  const even = analyzeDay(["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"].map((time, index) => irMg(`e${index}`, time, 100)));
+  assert.ok(even.before.every(row => !row.overnight));
+  assert.equal(lowestBeforeLabel(even), "Lowest before a dose");
+  assert.equal(tileModel(even)[0].label, "Lowest before a dose");
+  assert.match(statusMessage(even, 6), / Lowest before a dose \d+ at \d\d:\d\d\. /);
+});
+
+test("answerBarLow: the phone bar's second line stays short", () => {
+  const analysis = analyzeDay(TEST_REGIMEN);
+  const low = analysis.stats.lowestBefore;
+  assert.equal(answerBarLow(analysis), `Dips to ${r(low.level)} at ${formatClock(low.minute)} ↓`);
+  const moved = analyzeDay(MOVED);
+  const snapshot = pinSnapshot(analysis);
+  const movedLow = moved.stats.lowestBefore;
+  assert.notEqual(r(movedLow.level), r(low.level));
+  assert.equal(answerBarLow(moved, snapshot), `Dips to ${r(movedLow.level)} (was ${r(low.level)}) ↓`, "the was form drops the time");
+  assert.equal(answerBarLow(analysis, snapshot), `Dips to ${r(low.level)} at ${formatClock(low.minute)} ↓`, "no 'was' when unchanged");
+  const single = analyzeDay([rytary("s", "08:00")]);
+  assert.equal(answerBarLow(single), `Lowest: ${r(single.stats.min)} at ${formatClock(single.stats.minMinute)} ↓`);
+  // About 176 px on a 320 px phone: 24 characters, with room for 3-digit levels.
+  for (const text of [answerBarLow(analysis), answerBarLow(moved, snapshot), answerBarLow(single)]) {
+    assert.ok(text.length <= 24 - 2, `"${text}" leaves room for 3-digit levels`);
+  }
 });
 
 test("tiles: a low more than 10 min before the dose says 'before the … dose'", () => {
@@ -691,7 +724,7 @@ test("statusMessage summarizes the day (SPEC 4.9)", () => {
   const analysis = analyzeDay(TEST_REGIMEN);
   const { stats } = analysis;
   assert.equal(statusMessage(analysis, 6),
-    `Updated. 6 doses, 1,240 mg levodopa = 995 mg LEDD a day. Lowest before a dose ${r(stats.lowestBefore.level)} at `
+    `Updated. 6 doses, 1,240 mg levodopa = 995 mg LEDD a day. Daytime low ${r(stats.lowestBefore.level)} at `
     + `${formatClock(stats.lowestBefore.minute)}. Highest ${r(stats.max)} at ${formatClock(stats.maxMinute)}.`);
   assert.match(statusMessage(analysis, 7), /^Updated\. 7 doses, /, "the count includes doses without an amount");
 });

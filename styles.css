@@ -389,7 +389,7 @@ a:hover { color: var(--accent-hover); }
 .answer-low { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
 .add-bar { flex: none; min-width: 112px; white-space: nowrap; }
 .add-bar .add-short { display: none; }
-@media (max-width: 359px) {
+@media (max-width: 399px) {
   .add-bar { min-width: 0; }
   .add-bar .add-long { display: none; }
   .add-bar .add-short { display: inline; }

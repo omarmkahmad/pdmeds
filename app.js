@@ -31,6 +31,7 @@ import {
 } from "./src/amounts.js";
 import {
   analyzeDay,
+  answerBarLow,
   buildSheetRows,
   chartDesc,
   compareModel,
@@ -860,7 +861,7 @@ function renderResults() {
     analysis = null;
     ui.pinned = null;
     els.barLedd.textContent = "LEDD 0 mg/day";
-    els.barLow.textContent = "No dose has an amount yet";
+    els.barLow.textContent = "No amounts yet";
     els.pinButton.setAttribute("aria-pressed", "false");
     els.pinButton.textContent = "Pin to compare";
     return;
@@ -1004,14 +1005,7 @@ function renderHourTable() {
 function renderAnswerBar(compare) {
   const totals = dailyTotals(state.doses);
   els.barLedd.textContent = `LEDD ${formatNumber(totals.led)} mg/day`;
-  const low = analysis.stats.lowestBefore;
-  let text = low
-    ? `Dips to ${formatNumber(Math.round(low.level), 0)} at ${formatClock(low.minute)} ↓`
-    : `Lowest: ${formatNumber(Math.round(analysis.stats.min), 0)} at ${formatClock(analysis.stats.minMinute)} ↓`;
-  if (compare && low && ui.pinned?.lowestBefore && Math.round(ui.pinned.lowestBefore.level) !== Math.round(low.level)) {
-    text = text.replace(" ↓", ` (was ${formatNumber(Math.round(ui.pinned.lowestBefore.level), 0)}) ↓`);
-  }
-  els.barLow.textContent = text;
+  els.barLow.textContent = answerBarLow(analysis, compare ? ui.pinned : null);
 }
 
 function currentHighlight() {
