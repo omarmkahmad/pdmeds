@@ -1,7 +1,7 @@
 // The one sentence added to the owner's "About the level" text, from the
 // verified research (advanced-PD dose-normalized IR Cmax: Modi 2019 and the
 // FDA clinical pharmacology reviews for NDA 203312 and 217186).
-export const LEVEL_ANCHOR_SENTENCE = "In people with advanced PD, one 100 mg IR dose peaks at about 1,450 ng/mL on average (roughly 1,000 to 2,000 between people), so 1 unit is about 14.5 ng/mL (Modi 2019; FDA reviews of Rytary and Crexont).";
+export const LEVEL_ANCHOR_SENTENCE = "In advanced PD, one 100 mg IR dose peaks at about 1,450 ng/mL on average, but people vary widely (about two in three fall between 800 and 2,100 ng/mL), so 1 unit is roughly 14.5 ng/mL (Modi 2019; FDA reviews of Rytary and Crexont).";
 
 // Owner-approved toggletip wording. test/copy.test.js checks these strings
 // against the approved text, so change them only with the owner's sign-off.

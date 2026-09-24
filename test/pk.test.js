@@ -75,6 +75,6 @@ test("each component's share of the area equals its stated fraction", () => {
   }
 });
 
-test("Crexont uses the label's 25% immediate-release / 75% extended-release split", () => {
+test("Crexont uses the reported 25% immediate-release / 75% extended-release split (LeWitt 2023)", () => {
   assert.deepEqual(DRUG_BY_ID.crexont.exposure.values.map(component => component.fraction), [0.25, 0.75]);
 });

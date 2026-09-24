@@ -336,11 +336,11 @@ test("medicineChange follows SPEC 3.5 with the exact notes", () => {
     count: 1,
     dose: 245,
     mode: "strength",
-    note: "Amount set to 1 × 61.25/245 capsule (245 mg), the usual starting amount for Rytary. Check it."
+    note: "Amount set to 1 × 61.25/245 capsule (245 mg). This is not a converted dose. Check it."
   });
   assert.equal(
     medicineChange({ fromDrug: "sinemet", toDrug: "inbrija", mode: "strength", intendedMg: 100 }).note,
-    "Amount set to 2 × 42 mg capsules (84 mg), the usual starting amount for Inbrija. Check it."
+    "Amount set to 2 × 42 mg capsules (84 mg). This is not a converted dose. Check it."
   );
   // Crexont says "assumed" where its factor is shown.
   assert.equal(
@@ -377,7 +377,7 @@ test("arrowing IR → CR → Rytary → IR returns to the original amount (SPEC 
     ["25/100", 1, 100], ["61.25/245", 1, 245], ["25/100", 1, 100]
   ]);
   assert.equal(steps[0].note, "Same 100 mg levodopa, now 1 × 25/100 tablet. Sinemet CR counts ×0.75, so LEDD goes from 100 to 75 mg. Products are not mg-for-mg equivalent.");
-  assert.equal(steps[1].note, "Amount set to 1 × 61.25/245 capsule (245 mg), the usual starting amount for Rytary. Check it.");
+  assert.equal(steps[1].note, "Amount set to 1 × 61.25/245 capsule (245 mg). This is not a converted dose. Check it.");
   // The SPEC 3.5 note, worked from the intended amount (regression: the
   // unapproved "Back to …" variant, which an extra currentMg used to trigger, is gone).
   assert.equal(steps[2].note, "Same 100 mg levodopa, now 1 × 25/100 tablet. Sinemet IR counts ×1, so LEDD goes from 50 to 100 mg. Products are not mg-for-mg equivalent.");
@@ -387,7 +387,7 @@ test("arrowing IR → CR → Rytary → IR returns to the original amount (SPEC 
 
 test("Inbrija never goes into mg mode and stays within 2 capsules (regression; SPEC 3.3, owner request 5)", () => {
   const sameNote = "Same 84 mg levodopa, now 2 × 42 mg capsules. Inbrija counts ×0.69, so LEDD goes from 84 to 58 mg. Products are not mg-for-mg equivalent.";
-  const setNote = "Amount set to 2 × 42 mg capsules (84 mg), the usual starting amount for Inbrija. Check it.";
+  const setNote = "Amount set to 2 × 42 mg capsules (84 mg). This is not a converted dose. Check it.";
   // mg mode with an exact capsule amount switches to capsules.
   assert.deepEqual(medicineChange({ fromDrug: "sinemet", toDrug: "inbrija", mode: "mg", intendedMg: 84 }), {
     strength: "42", count: 2, dose: 84, mode: "strength", note: sameNote
@@ -443,7 +443,7 @@ test("a round trip through Inbrija keeps the intended amount (SPEC 3.5)", () => 
     count: 1,
     dose: 245,
     mode: "strength",
-    note: "Amount set to 1 × 61.25/245 capsule (245 mg), the usual starting amount for Rytary. Check it."
+    note: "Amount set to 1 × 61.25/245 capsule (245 mg). This is not a converted dose. Check it."
   });
   // Leaving Inbrija for a medicine with no exact match keeps the intended mg
   // in mg mode rather than setting that medicine's default.
@@ -474,7 +474,7 @@ test("every medicine-change note matches a SPEC 5.3 template (regression: no una
   const amount = "(½|\\d+½?) × (\\S+(?: mg)?) (tablet|tablets|capsule|capsules)";
   const same = new RegExp(`^Same ([\\d,.]+) mg levodopa, now ${amount}\\. ${names} counts ×[\\d.]+( \\(assumed\\))?, `
     + "so LEDD goes from [\\d,.]+ to [\\d,.]+ mg\\. Products are not mg-for-mg equivalent\\.$");
-  const set = new RegExp(`^Amount set to ${amount} \\(([\\d,.]+) mg\\), the usual starting amount for ${names}\\. Check it\\.$`);
+  const set = new RegExp(`^Amount set to ${amount} \\(([\\d,.]+) mg\\)\\. This is not a converted dose\\. Check it\\.$`);
   let notes = 0;
   for (const fromDrug of [null, ...DRUG_ORDER]) {
     for (const toDrug of DRUG_ORDER) {

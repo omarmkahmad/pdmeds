@@ -221,8 +221,10 @@ export function medicineChange({ fromDrug = null, toDrug, mode = "strength", int
     count,
     dose,
     mode: "strength",
-    note: `Amount set to ${formatCount(count)} × ${strength.label} ${unitWord(to, count)} (${formatNumber(dose)} mg), `
-      + `the usual starting amount for ${to.shortName}. Check it.`
+    // The default is a convenient amount to edit, not a label starting dose
+    // (Rytary's label starts at 23.75/95), so the note makes no dosing claim.
+    note: `Amount set to ${formatCount(count)} × ${strength.label} ${unitWord(to, count)} (${formatNumber(dose)} mg). `
+      + "This is not a converted dose. Check it."
   };
 }
 

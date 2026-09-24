@@ -90,7 +90,7 @@ export const DRUGS = [
       { fraction: 0.25, peakTime: 60, halfLife: 81 },
       { fraction: 0.75, peakTime: 170, halfLife: 180 }
     ]),
-    model: "25% immediate-release granules (peak 60 min, half-life 81 min) and 75% extended-release beads (peak 170 min, half-life 180 min), the label's split. Curve area 0.88 of the same mg of IR (label). Fitted to single doses in advanced PD: about 4.7 h above half its peak, with a peak per mg about 0.37 of IR.",
+    model: "25% immediate-release granules (peak 60 min, half-life 81 min) and 75% extended-release beads (peak 170 min, half-life 180 min), the split reported by LeWitt 2023. Curve area 0.88 of the same mg of IR (the low end of the label's 88–99%). Fitted to single doses in advanced PD: about 4.7 h above half its peak, with a peak per mg about 0.37 of IR.",
     sources: [SOURCES.modi2019, SOURCES.crexontLabel, SOURCES.lewitt2023, SOURCES.fdaCrexont, SOURCES.jost2023]
   },
   {
@@ -103,7 +103,7 @@ export const DRUGS = [
     defaultStrength: "42", defaultCount: 2, maxCount: 2,
     peaksText: "Peaks about 30 min after inhaling", halfText: "stays above half its peak for about 2 h",
     isLevodopa: true, led: factor(0.69), exposure: components(0.69, [{ fraction: 1, peakTime: 30, halfLife: 115 }]),
-    model: "Rise to a peak at 30 min, then half-life 115 min. Curve area 0.69 of the same mg of oral IR (label, per capsule mg).",
+    model: "Rise to a peak at 30 min, then half-life 115 min. Curve area 0.69 of the same mg of oral IR (label and FDA review; healthy volunteers, per capsule mg).",
     sources: [SOURCES.inbrijaLabel, SOURCES.fdaInbrija, SOURCES.jost2023]
   }
 ];

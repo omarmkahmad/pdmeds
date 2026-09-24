@@ -55,13 +55,13 @@ const escapeHtml = value => String(value)
 
 const REFERENCES = [
   "Jost ST, et al. Levodopa dose equivalency in Parkinson's disease: updated systematic review and proposals. Mov Disord. 2023;38(7):1236–1252. doi:10.1002/mds.29410.",
-  "Modi NB, Mittur A, Rubens R, Khanna S, Gupta S. Single-dose pharmacokinetics and pharmacodynamics of IPX203 in patients with advanced Parkinson disease: a comparison with immediate-release and extended-release carbidopa-levodopa. Clin Neuropharmacol. 2019;42(1):4–8. doi:10.1097/WNF.0000000000000314.",
+  "Modi NB, Mittur A, Rubens R, Khanna S, Gupta S. Single-dose pharmacokinetics and pharmacodynamics of IPX203 in patients with advanced Parkinson disease: a comparison with immediate-release carbidopa-levodopa and with extended-release carbidopa-levodopa capsules. Clin Neuropharmacol. 2019;42(1):4–8. doi:10.1097/WNF.0000000000000314.",
   "Modi NB, Mittur A, Dinh P, Rubens R, Gupta S. Pharmacodynamics, efficacy, and safety of IPX203 in Parkinson disease patients with motor fluctuations. Clin Neuropharmacol. 2019;42(5):149–156. doi:10.1097/WNF.0000000000000354.",
   "LeWitt P, et al. Improving levodopa delivery: IPX203, a novel extended-release carbidopa-levodopa formulation. Clin Park Relat Disord. 2023;8:100197. doi:10.1016/j.prdoa.2023.100197.",
-  "Hsu A, Yao HM, Gupta S, Modi NB. Comparison of the pharmacokinetics of an oral extended-release capsule formulation of carbidopa-levodopa (IPX066) with immediate-release, sustained-release, and carbidopa-levodopa-entacapone. J Clin Pharmacol. 2015;55(9):995–1003. doi:10.1002/jcph.514.",
+  "Hsu A, Yao HM, Gupta S, Modi NB. Comparison of the pharmacokinetics of an oral extended-release capsule formulation of carbidopa-levodopa (IPX066) with immediate-release carbidopa-levodopa (Sinemet), sustained-release carbidopa-levodopa (Sinemet CR), and carbidopa-levodopa-entacapone (Stalevo). J Clin Pharmacol. 2015;55(9):995–1003. doi:10.1002/jcph.514.",
   "Mittur A, Gupta S, Modi NB. Pharmacokinetics of Rytary, an extended-release capsule formulation of carbidopa-levodopa. Clin Pharmacokinet. 2017;56(9):999–1014. doi:10.1007/s40262-017-0511-y.",
   "Mao Z, Hsu A, Gupta S, Modi NB. Population pharmacodynamics of IPX066: an oral extended-release capsule formulation of carbidopa-levodopa, and immediate-release carbidopa-levodopa in patients with advanced Parkinson's disease. J Clin Pharmacol. 2013;53(5):523–531. doi:10.1002/jcph.63.",
-  "Wach A, Kopra J, Marjanovic I, Knecht M, Jenner P. Population pharmacokinetic analyses comparing immediate-release levodopa/carbidopa, controlled-release levodopa/carbidopa, and IPX203. J Neural Transm. 2026. doi:10.1007/s00702-026-03233-w.",
+  "Wach A, Kopra J, Marjanovic I, Knecht M, Jenner P. Population pharmacokinetic analyses comparing immediate-release levodopa/carbidopa, controlled-release levodopa/carbidopa, and IPX203. Findings from a phase 1 study in healthy volunteers. J Neural Transm. 2026. doi:10.1007/s00702-026-03233-w.",
   "Nutt JG. Pharmacokinetics and pharmacodynamics of levodopa. Mov Disord. 2008;23(Suppl 3):S580–S584. doi:10.1002/mds.22037.",
   "Contin M, Martinelli P. Pharmacokinetics of levodopa. J Neurol. 2010;257(Suppl 2):S253–S261. doi:10.1007/s00415-010-5728-8.",
   "US prescribing information: Sinemet, Sinemet CR, Rytary, Crexont, and Inbrija (accessdata.fda.gov), and the FDA clinical pharmacology reviews for NDA 203312 (Rytary), 217186 (Crexont), and 209184 (Inbrija)."
@@ -289,7 +289,7 @@ function editorHtml(dose) {
       <legend>Medicine</legend>
       <div class="chips">${chips}</div>
       <p class="generic">${escapeHtml(drug.generic)}</p>
-      ${isInbrija ? `<p class="field-note">Inbrija is usually an as-needed inhaled dose for OFF episodes: 2 capsules (84 mg) each time.</p>` : ""}
+      ${isInbrija ? `<p class="field-note">Inbrija is only for OFF episodes, taken as needed on top of carbidopa/levodopa. Each dose is 2 capsules (84 mg), up to 5 times a day.</p>` : ""}
     </fieldset>
     <div class="editor-block">
       <div class="amount-grid">${strengthField}${amountField}</div>

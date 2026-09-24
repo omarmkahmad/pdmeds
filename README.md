@@ -46,7 +46,7 @@ Crexont was approved after that review, so its LEDD factor (×0.5, the Rytary fa
 
 The chart's unit is anchored to immediate-release levodopa: one 100 mg IR dose peaks at 100. In advanced PD that peak averages about 1,450 ng/mL, with wide variation between people.
 
-Each curve's area follows the label's relative bioavailability against oral IR carbidopa/levodopa: Sinemet CR 0.85 (published values 0.70–1.07), Rytary 0.70, Crexont 0.88, Inbrija 0.69. LEDD keeps the Jost factors separately.
+Each curve's area follows published bioavailability relative to oral IR carbidopa/levodopa: Rytary 0.70 (label), Crexont 0.88 (the low end of the label's 0.88–0.99), and Inbrija 0.69 (label and FDA review, healthy volunteers). Sinemet CR 0.85 is a middle value: its label gives 0.70–0.75, and other studies go up to 1.07. LEDD keeps the Jost factors separately.
 
 The Rytary and Crexont shapes are fitted to single doses in the same advanced-PD patients (Modi et al., Clin Neuropharmacol 2019, [doi:10.1097/WNF.0000000000000314](https://doi.org/10.1097/WNF.0000000000000314)):
 
@@ -54,7 +54,7 @@ The Rytary and Crexont shapes are fitted to single doses in the same advanced-PD
 |---|---|---|
 | Sinemet IR | 1.9 h / 1.9 h | 1 / 1 |
 | Rytary (27% IR-like + 73% slower part) | 3.95 h / 3.9 h | 0.35 / 0.34–0.36 |
-| Crexont (25% IR granules + 75% ER beads) | 4.7 h / 4.7 h | 0.37 / 0.36–0.38 |
+| Crexont (25% IR granules + 75% ER beads, per LeWitt 2023) | 4.7 h / 4.7 h | 0.37 / 0.36–0.38 |
 
 `test/pk.test.js` checks every preparation against its published ranges, so a parameter change that moves a curve outside the evidence fails the tests. Other sources: the US labels for all five products; the FDA clinical pharmacology reviews for NDA 203312 (Rytary), 217186 (Crexont), and 209184 (Inbrija); Hsu 2015; LeWitt 2023; Mao 2013; Nutt 2008; Contin and Martinelli 2010; and Wach 2026.
 
