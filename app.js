@@ -1104,6 +1104,20 @@ els.doseList.addEventListener("click", event => {
     fresh?.scrollIntoView({ block: "nearest" });
     return;
   }
+  // A click on a medicine chip picks it here, not through the label's own
+  // activation: browsers skip that activation while text is selected, and a
+  // new dose opens with its time selected (the mousedown above keeps it so),
+  // which made a chip take several clicks.
+  const chip = event.target.closest(".chip");
+  if (chip) {
+    const radio = chip.querySelector("input[type=radio]");
+    const open = doseById(ui.openId);
+    if (radio && open) {
+      event.preventDefault();
+      changeMedicine(open, radio.value);
+    }
+    return;
+  }
   const action = event.target.closest("[data-act]")?.dataset.act;
   const dose = doseById(ui.openId);
   if (!action || !dose) return;
