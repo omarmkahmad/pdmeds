@@ -8,7 +8,7 @@ import { LEVEL_ANCHOR_SENTENCE, TIPS, TIP_LABELS } from "../src/copy.js";
 const APPROVED = {
   leddContribution: "How much this dose counts toward the day's levodopa-equivalent dose. It equals levodopa mg × the product's factor: IR ×1, Sinemet CR ×0.75, Rytary ×0.5, Crexont ×0.5 (assumed), Inbrija ×0.69 (Jost 2023). Use it to compare total dopaminergic load. It is not a dose-conversion tool.",
   totalLedd: "The cumulative sum of all rows LEDD. A research measure for comparing medication burden across patients and studies. It does not establish the right dose for a patient.",
-  level: "Modeled plasma levodopa on a relative scale. 100 = the peak after one 100 mg IR dose taken on its own (for example, one Sinemet 25/100). Real levels vary a lot with meals, gastric emptying, and disease stage.",
+  level: "Modeled plasma levodopa on a relative scale. 100 = the peak after one 100 mg IR dose taken on its own (for example, one Sinemet 25/100). Real levels vary a lot with meals, gastric emptying, age, and body weight. Disease stage changes the response to a level more than the level itself.",
   target: "An optional line you set. Time at or above it counts as \"at or above target\". Tip: set it to the modeled level at the time this patient usually wears off. It is not a validated \"on\" threshold.",
   high: "An optional line above the target. Time at or above it counts as high exposure. Tip: set it to the modeled level at the time peak-dose dyskinesia usually starts. It is not a validated dyskinesia cutoff.",
   highest: "The highest modeled level of the day, and when it happens. Peak-dose effects such as dyskinesia are most likely around peaks.",
