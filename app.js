@@ -92,7 +92,10 @@ const ui = {
   cursorMinute: 0,
   cursorTouched: false,
   openTip: null,
-  hoverId: null
+  hoverId: null,
+  // Time text typed but not yet applied (e.g. "6 9 12"), kept across editor
+  // re-renders so a medicine change does not wipe it.
+  pendingTimeText: null
 };
 
 let analysis = null;
@@ -261,6 +264,8 @@ function editorHtml(dose) {
   const labels = countLabels(drug, dose.strength);
   const legend = ui.isNew ? "New dose" : `Edit the ${doseTitle(dose)} dose`;
   const notes = ui.notes;
+  const timeText = ui.pendingTimeText ?? dose.time;
+  const timeEcho = ui.pendingTimeText === null ? "" : describeTimeInput(ui.pendingTimeText).message;
   const chips = DRUG_ORDER.map(drugId => {
     const option = DRUG_BY_ID[drugId];
     return `<label class="chip"><input type="radio" name="drug-${id}" value="${drugId}"${drugId === dose.drug ? " checked" : ""}><span class="check" aria-hidden="true">✓</span>${escapeHtml(option.shortName)}</label>`;
@@ -277,10 +282,10 @@ function editorHtml(dose) {
       <label class="editor-label" for="time-${id}">Time (24-hour)</label>
       <div class="time-controls">
         <button type="button" class="nudge" data-act="earlier" tabindex="-1" aria-label="30 minutes earlier"><span class="nudge-long">−30 min</span><span class="nudge-short">−30</span></button>
-        <input class="text-field time-field" id="time-${id}" data-field="time" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" value="${dose.time}" aria-describedby="timeHint-${id} timeError-${id} timeNote-${id}">
+        <input class="text-field time-field" id="time-${id}" data-field="time" type="text" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" value="${escapeHtml(timeText)}" aria-describedby="timeHint-${id} timeError-${id} timeNote-${id}">
         <button type="button" class="nudge" data-act="later" tabindex="-1" aria-label="30 minutes later"><span class="nudge-long">+30 min</span><span class="nudge-short">+30</span></button>
       </div>
-      <output class="echo" id="timeEcho-${id}" for="time-${id}"></output>
+      <output class="echo" id="timeEcho-${id}" for="time-${id}">${escapeHtml(timeEcho)}</output>
       <p class="hint" id="timeHint-${id}">24-hour clock: 18 = 6 pm.<span class="pointer-only"> Up/Down arrows move it 30 min. Tip: type several times at once, like 6 9 12 15 18.</span></p>
       <p class="field-error" id="timeError-${id}"></p>
       <p class="field-note" id="timeNote-${id}">${escapeHtml(notes.time ?? "")}</p>
@@ -333,7 +338,12 @@ function updateRow(dose) {
   template.innerHTML = rowHtml(dose);
   const fresh = template.content.firstElementChild;
   row.className = fresh.className;
-  row.innerHTML = fresh.innerHTML;
+  // Swap only the parts that changed, so a press that is already on the row
+  // keeps its target and the click still lands.
+  [...fresh.children].forEach((child, index) => {
+    const current = row.children[index];
+    if (current && current.outerHTML !== child.outerHTML) current.replaceWith(child);
+  });
   const legend = item.querySelector(".editor > legend");
   if (legend && !ui.isNew) legend.textContent = `Edit the ${doseTitle(dose)} dose`;
 }
@@ -351,23 +361,34 @@ function renderDoseMeta() {
   els.addDoseWide.textContent = full ? `${MAX_DOSES} doses is the limit` : "+ Add dose";
   els.addDoseBar.disabled = full;
   els.addDoseBar.setAttribute("aria-label", full ? `${MAX_DOSES} doses is the limit` : "Add dose");
+  els.addDoseBar.querySelector(".add-long").textContent = full ? `${MAX_DOSES} max` : "+ Add dose";
+  els.addDoseBar.querySelector(".add-short").textContent = full ? `${MAX_DOSES} max` : "+ Add";
   const totals = dailyTotals(state.doses);
   const counted = state.doses.some(hasAmount);
   els.dailyTotal.hidden = !counted;
   els.dailyTotalText.textContent = `${formatNumber(totals.mg)} mg levodopa = ${formatNumber(totals.led)} mg LEDD/day`;
   els.toolsRow.hidden = empty;
   els.makeSheet.hidden = !counted;
-  els.answerBar.hidden = !counted;
+  // The bar holds the phone's only Add button, so it shows whenever any dose
+  // exists, even before one has an amount.
+  els.answerBar.hidden = empty;
 }
 
 /* ---------- Editor behavior ---------- */
 
-function openEditor(id, { isNew = false } = {}) {
+function listSnapshot() {
+  return { doses: cloneDoses(state.doses), example: state.example };
+}
+
+// snapshot: the list to restore on Escape (for a new dose, taken before it
+// was added).
+function openEditor(id, { isNew = false, snapshot = listSnapshot() } = {}) {
   const dose = doseById(id);
   if (!dose) return;
   ui.openId = id;
   ui.isNew = isNew;
-  ui.editSnapshot = { ...dose };
+  ui.editSnapshot = snapshot;
+  ui.pendingTimeText = null;
   ui.intendedMg = dose.dose;
   ui.notes = {};
   frozenOrder = listOrder().map(item => item.id);
@@ -380,7 +401,14 @@ function closeEditor() {
   ui.isNew = false;
   ui.editSnapshot = null;
   ui.notes = {};
+  ui.pendingTimeText = null;
   frozenOrder = null;
+}
+
+// Any change to a dose ends the Undo offer and the example.
+function markEdited() {
+  clearUndo();
+  state.example = false;
 }
 
 function editorField(field, id = ui.openId) {
@@ -416,6 +444,8 @@ function commitTime(dose, { allowMulti = true } = {}) {
     return false;
   }
   if (parsed.times.length > 1) {
+    // Kept as typed until Done or Enter, so the copies get the final
+    // medicine and amount.
     if (!allowMulti) return true;
     if (state.doses.length + parsed.times.length - 1 > MAX_DOSES) {
       showTimeError(dose, `That would make more than ${MAX_DOSES} doses.`);
@@ -439,7 +469,9 @@ function showTimeError(dose, message) {
 function applyTime(dose, time) {
   const input = editorField("time", dose.id);
   const changed = dose.time !== time;
+  if (changed) markEdited();
   dose.time = time;
+  ui.pendingTimeText = null;
   if (input) input.value = time;
   setFieldMessage(`timeEcho-${dose.id}`, "");
   ui.notes.time = isOvernight(dose) ? "Overnight dose. Is that right?" : null;
@@ -454,8 +486,8 @@ function addMultipleTimes(dose, times) {
   const copies = times.slice(1).map(minute => ({ ...dose, id: newId(), time: formatClock(minute) }));
   state.doses.push(...copies);
   setUndo(snapshot, `Added ${copies.length + 1} doses.`);
-  announce(`Added ${copies.length} more ${drugOf(dose).shortName} doses.`);
   scheduleChanged();
+  announce(`Added ${copies.length} more ${drugOf(dose).shortName} ${copies.length === 1 ? "dose" : "doses"}.`);
 }
 
 function commitAmount(dose) {
@@ -463,6 +495,9 @@ function commitAmount(dose) {
   if (dose.strength === null) {
     const input = editorField("mg", dose.id);
     if (!input) return true;
+    // An amount opened from a file may sit outside the typing range; leave it
+    // alone unless it was edited.
+    if (input.value.trim() === (dose.dose === null ? "" : String(dose.dose))) return true;
     const parsed = parseMg(input.value);
     setInvalid(input, Boolean(parsed.error));
     setFieldMessage(`amountError-${dose.id}`, parsed.error);
@@ -492,6 +527,7 @@ function commitAmount(dose) {
 
 function setDoseAmount(dose, mg) {
   const changed = dose.dose !== mg;
+  if (changed) markEdited();
   dose.dose = mg;
   ui.intendedMg = mg;
   setFieldMessage(`calc-${dose.id}`, calcText(dose));
@@ -518,6 +554,7 @@ function changeMedicine(dose, toDrugId) {
     intendedMg: ui.intendedMg
   });
   const intended = ui.intendedMg;
+  markEdited();
   dose.drug = toDrugId;
   dose.strength = result.strength;
   dose.count = result.count;
@@ -533,6 +570,7 @@ function changeMedicine(dose, toDrugId) {
 
 function changeStrength(dose, value) {
   const drug = drugOf(dose);
+  markEdited();
   if (value === "other") {
     dose.strength = null;
     dose.count = null;
@@ -567,10 +605,10 @@ function commitEditor({ focusAfter = true } = {}) {
     closeEditor();
     return true;
   }
+  const amountOk = commitAmount(dose);
   const timeInput = editorField("time", dose.id);
   const timeText = timeInput?.value.trim() ?? dose.time;
-  const timeOk = timeText === dose.time || commitTime(dose);
-  const amountOk = commitAmount(dose);
+  const timeOk = amountOk && (timeText === dose.time || commitTime(dose));
   if (!timeOk || !amountOk) {
     const firstInvalid = els.doseList.querySelector(`#editor-${dose.id} [aria-invalid="true"]`);
     firstInvalid?.focus();
@@ -588,7 +626,7 @@ function commitEditor({ focusAfter = true } = {}) {
     announce(`Moved the ${dose.time} dose to position ${newIndex + 1} of ${after.length}.`);
   }
   if (focusAfter) {
-    if (wasNew) addButton().focus();
+    if (wasNew) (addButton() ?? rowButton(dose.id))?.focus();
     else rowButton(dose.id)?.focus();
   }
   return true;
@@ -598,25 +636,24 @@ function cancelEditor() {
   const dose = doseById(ui.openId);
   if (!dose) return;
   const wasNew = ui.isNew;
-  if (wasNew) {
-    state.doses = state.doses.filter(item => item.id !== dose.id);
-  } else {
-    Object.assign(dose, ui.editSnapshot);
-  }
+  state.doses = cloneDoses(ui.editSnapshot.doses);
+  state.example = ui.editSnapshot.example;
   closeEditor();
   scheduleChanged();
   renderDoseList();
   highlightCurrent();
-  if (wasNew || !rowButton(dose.id)) (state.doses.length ? addButton() : els.addFirst).focus();
-  else rowButton(dose.id).focus();
+  const row = wasNew ? null : rowButton(dose.id);
+  (row ?? addButton() ?? els.doseList.querySelector(".dose-row") ?? els.addFirst).focus();
 }
 
 function rowButton(id) {
   return els.doseList.querySelector(`[data-row="${id}"]`);
 }
 
+// The Add button for this width, or null when it is hidden or disabled.
 function addButton() {
-  return wideQuery.matches ? els.addDoseWide : els.addDoseBar;
+  const button = wideQuery.matches ? els.addDoseWide : els.addDoseBar;
+  return button.disabled || button.closest("[hidden]") ? null : button;
 }
 
 function focusTimeField(id) {
@@ -636,10 +673,11 @@ function addDose(sourceId = null) {
     ? nextDoseDefaults(state.doses, source)
     : { time: "08:00", drug: "sinemet", strength: "25/100", count: 1, dose: 100 };
   const dose = { id: newId(), ...defaults };
+  const snapshot = listSnapshot();
   state.doses.push(dose);
   state.example = false;
   scheduleChanged();
-  openEditor(dose.id, { isNew: true });
+  openEditor(dose.id, { isNew: true, snapshot });
   focusTimeField(dose.id);
   rowButton(dose.id)?.scrollIntoView({ block: "nearest" });
 }
@@ -648,7 +686,7 @@ function removeDose(id) {
   const dose = doseById(id);
   if (!dose) return;
   const snapshot = takeSnapshot();
-  const order = sortedDoses().map(item => item.id);
+  const order = listOrder().map(item => item.id);
   const position = order.indexOf(id);
   state.doses = state.doses.filter(item => item.id !== id);
   state.example = false;
@@ -658,9 +696,9 @@ function removeDose(id) {
   scheduleChanged();
   renderDoseList();
   highlightCurrent();
-  const remaining = sortedDoses();
-  const next = remaining[position] ?? remaining[position - 1];
-  (next ? rowButton(next.id) : els.addFirst).focus();
+  const nextId = order.slice(position + 1).find(doseById)
+    ?? order.slice(0, position).reverse().find(doseById);
+  (nextId ? rowButton(nextId) : els.addFirst).focus();
 }
 
 /* ---------- Undo ---------- */
@@ -732,6 +770,7 @@ function tryExample() {
   ui.cursorTouched = false;
   closeEditor();
   if (snapshot) setUndo(snapshot, `Replaced ${snapshot.doses.length} doses with the example.`);
+  else clearUndo();
   syncLineInputs();
   scheduleChanged();
   renderDoseList();
@@ -760,7 +799,9 @@ function clearAll() {
 function parseLine(text) {
   const trimmed = text.trim();
   if (!trimmed) return { value: null, error: null };
-  const value = Number(trimmed.replace(",", "."));
+  // "1,000" uses a thousands separator; "1,5" a decimal comma.
+  const normalized = /^\d{1,3}(,\d{3})+(\.\d+)?$/.test(trimmed) ? trimmed.replaceAll(",", "") : trimmed.replace(",", ".");
+  const value = Number(normalized);
   if (!Number.isFinite(value) || value < 1 || value > 1000) return { value: null, error: "Enter a level from 1 to 1000." };
   return { value, error: null };
 }
@@ -818,6 +859,8 @@ function renderResults() {
   if (empty) {
     analysis = null;
     ui.pinned = null;
+    els.barLedd.textContent = "LEDD 0 mg/day";
+    els.barLow.textContent = "No dose has an amount yet";
     els.pinButton.setAttribute("aria-pressed", "false");
     els.pinButton.textContent = "Pin to compare";
     return;
@@ -851,6 +894,7 @@ const snap5 = minute => Math.min(1435, Math.max(0, Math.round(minute / 5) * 5));
 const TILE_TIPS = { lowest: "lowest", highest: "highest", fluctuation: "fluctuation", below: "target", above: "high", target: "target", high: "high" };
 
 function renderTiles() {
+  if (ui.openTip && els.tiles.contains(ui.openTip)) closeTip(false);
   const tiles = tileModel(analysis, ui.pinned);
   els.tiles.innerHTML = tiles.map(tile => {
     const tipKey = tile.info ?? TILE_TIPS[tile.key] ?? null;
@@ -1015,6 +1059,29 @@ function closeTip(returnFocus) {
   if (returnFocus && button.isConnected) button.focus();
 }
 
+// While a text field in the editor has focus, pressing a button must not
+// move focus first: the blur would apply the typed text and reflow the list
+// before the click lands, and the click would be lost. The clicked control
+// applies the typed text itself (see the capture listener below).
+document.addEventListener("mousedown", event => {
+  if (!ui.openId || !document.activeElement?.matches?.(".editor .text-field")) return;
+  if (event.target.closest?.("button, summary, .chip")) event.preventDefault();
+}, true);
+
+// Controls outside the editor (Pin, Save file, Clear all, ...) first apply any
+// typed text, as a blur would have. Editor buttons and rows handle it
+// themselves through commitEditor.
+document.addEventListener("click", event => {
+  if (!ui.openId) return;
+  const control = event.target.closest?.("button, summary, a");
+  if (!control || control.closest(".editor") || control.closest(".dose-row")) return;
+  const dose = doseById(ui.openId);
+  if (!dose) return;
+  const timeInput = editorField("time", dose.id);
+  if (timeInput && timeInput.value.trim() !== dose.time) commitTime(dose, { allowMulti: false });
+  commitAmount(dose);
+}, true);
+
 document.addEventListener("click", event => {
   const button = event.target.closest?.(".info");
   if (button) {
@@ -1048,9 +1115,11 @@ els.doseList.addEventListener("click", event => {
   if (!action || !dose) return;
   if (action === "earlier" || action === "later") {
     const input = editorField("time", dose.id);
+    const typed = parseTimes(input?.value ?? "").times;
+    const base = typed.length === 1 ? typed[0] : minuteOf(dose.time);
     setInvalid(input, false);
     setFieldMessage(`timeError-${dose.id}`, "");
-    applyTime(dose, formatClock(shiftTime(minuteOf(dose.time), action === "earlier" ? -30 : 30)));
+    applyTime(dose, formatClock(shiftTime(base, action === "earlier" ? -30 : 30)));
   } else if (action === "count-down" || action === "count-up") {
     stepCount(dose, action === "count-up" ? 1 : -1);
   } else if (action === "done") {
@@ -1068,6 +1137,7 @@ els.doseList.addEventListener("input", event => {
   const field = event.target.dataset.field;
   if (!dose || !field) return;
   if (field === "time") {
+    ui.pendingTimeText = event.target.value;
     const echo = describeTimeInput(event.target.value);
     setFieldMessage(`timeEcho-${dose.id}`, echo.message);
   } else if (field === "count") {
@@ -1087,19 +1157,15 @@ els.doseList.addEventListener("change", event => {
   if (!dose) return;
   const target = event.target;
   if (target.type === "radio") {
-    clearUndo();
     changeMedicine(dose, target.value);
     return;
   }
   const field = target.dataset.field;
   if (field === "time") {
-    clearUndo();
-    commitTime(dose);
+    commitTime(dose, { allowMulti: false });
   } else if (field === "strength") {
-    clearUndo();
     changeStrength(dose, target.value);
   } else if (field === "count" || field === "mg") {
-    clearUndo();
     commitAmount(dose);
   }
 });
@@ -1115,7 +1181,7 @@ els.doseList.addEventListener("keydown", event => {
       closeTip(true);
       return;
     }
-    if (target.closest(".editor")) {
+    if (target.closest(".editor") || target.closest(".dose-row")?.dataset.row === ui.openId) {
       event.preventDefault();
       cancelEditor();
     }
@@ -1390,7 +1456,9 @@ function renderDrugCards() {
 /* ---------- Print ---------- */
 
 function fillPrint() {
-  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const now = new Date();
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const today = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
   els.printHeader.replaceChildren();
   const title = document.createElement("h2");
   title.textContent = "Levodopa day summary";
@@ -1414,8 +1482,8 @@ function fillPrint() {
     const drug = drugOf(dose);
     const row = body.insertRow();
     const led = hasAmount(dose) ? `${formatNumber(dose.dose * drug.led.value)} (×${drug.led.value}${drug.ledAssumed ? ", assumed" : ""})` : "not counted";
-    const unit = dose.count === 1 ? drug.unit[0] : drug.unit[1];
-    const amount = dose.strength ? `${formatCount(dose.count)} × ${strengthOf(drug, dose.strength).label} ${unit}` : (hasAmount(dose) ? `${formatNumber(dose.dose)} mg` : "—");
+    // "1½ × 25/100 tablet": the unit names the strength, so it stays singular.
+    const amount = dose.strength ? `${formatCount(dose.count)} × ${strengthOf(drug, dose.strength).label} ${drug.unit[0]}` : (hasAmount(dose) ? `${formatNumber(dose.dose)} mg` : "—");
     for (const text of [dose.time, drug.shortName, amount, hasAmount(dose) ? formatNumber(dose.dose) : "—", led]) {
       row.insertCell().textContent = text;
     }
