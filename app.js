@@ -100,6 +100,21 @@ function chartGeometry() {
 let CHART = chartGeometry();
 
 const DASH_PATTERNS = ["", "8 4", "2 3", "10 3 2 3", "5 3", "12 4", "3 2 1 2"];
+const TOTAL_COLOR = "#17202a";
+
+function curveStyle(index) {
+  return {
+    color: PALETTE[index % PALETTE.length],
+    dash: DASH_PATTERNS[index % DASH_PATTERNS.length]
+  };
+}
+
+// Swatches are tiny SVG line samples rather than styled spans: the page's
+// Content Security Policy blocks inline style attributes, and a line sample
+// can also show the curve's dash pattern for readers who cannot rely on color.
+function lineSwatch(color, dash = "", width = 2.5) {
+  return `<svg class="line-swatch" viewBox="0 0 28 10" aria-hidden="true" focusable="false"><line x1="0" y1="5" x2="28" y2="5" stroke="${color}" stroke-width="${width}"${dash ? ` stroke-dasharray="${dash}"` : ""}/></svg>`;
+}
 
 function setMessage(element, message = "", success = false) {
   element.textContent = message;
@@ -149,6 +164,10 @@ function renderParameterTable() {
   }).join("");
 }
 
+function removeLabel(dose) {
+  return `Remove ${DRUG_BY_ID[dose.drug].name}, ${dose.dose} milligrams at ${dose.time}`;
+}
+
 function renderRows() {
   const led = calculateLedSummary(state.doses);
   if (!state.doses.length) {
@@ -158,14 +177,14 @@ function renderRows() {
 
   elements.regimenBody.innerHTML = state.doses.map((dose, index) => {
     const drug = DRUG_BY_ID[dose.drug];
-    const label = `${drug.name}, ${dose.dose} milligrams at ${dose.time}`;
+    const { color, dash } = curveStyle(index);
     return `<tr>
       <td><input type="time" value="${dose.time}" data-index="${index}" data-field="time" aria-label="Dose time for row ${index + 1}"></td>
       <td><select data-index="${index}" data-field="drug" aria-label="Medication for row ${index + 1}">${drugOptions(drug.id)}</select></td>
       <td><input type="number" min="0" max="${MAX_DOSE_MG}" step="any" inputmode="decimal" value="${dose.dose}" data-index="${index}" data-field="dose" aria-label="Dose in milligrams for row ${index + 1}"></td>
       <td><span id="row-led-${index}" title="Research levodopa-equivalent daily dose contribution">${round1(led.rows[index].totalLed)} mg</span></td>
-      <td><span class="curve-chip" style="background:${PALETTE[index % PALETTE.length]}" aria-label="Curve color for row ${index + 1}"></span></td>
-      <td><button class="button remove-button" type="button" data-remove="${index}" aria-label="Remove ${escapeHtml(label)}">×</button></td>
+      <td><span class="curve-chip">${lineSwatch(color, dash)}</span></td>
+      <td><button class="button remove-button" type="button" data-remove="${index}" aria-label="${escapeHtml(removeLabel(dose))}">×</button></td>
     </tr>`;
   }).join("");
 
@@ -174,10 +193,15 @@ function renderRows() {
   });
   elements.regimenBody.querySelectorAll("button[data-remove]").forEach(button => {
     button.addEventListener("click", () => {
-      state.doses.splice(Number(button.dataset.remove), 1);
+      const index = Number(button.dataset.remove);
+      state.doses.splice(index, 1);
       markPersonalized();
       renderRows();
       recompute();
+      // Keep keyboard focus in the table: the row that moved into this one's
+      // place, else the new last row, else the Add dose button.
+      const next = elements.regimenBody.querySelector(`button[data-remove="${Math.min(index, state.doses.length - 1)}"]`);
+      (next ?? elements.addDose).focus();
     });
   });
 }
@@ -202,6 +226,8 @@ function handleRowChange(event) {
     const drug = DRUG_BY_ID[control.value];
     dose.drug = drug.id;
     dose.dose = drug.defaultDose;
+    const doseInput = elements.regimenBody.querySelector(`input[data-index="${index}"][data-field="dose"]`);
+    if (doseInput) doseInput.value = dose.dose;
   } else {
     const value = Number(control.value);
     if (!Number.isFinite(value) || value < 0 || value > MAX_DOSE_MG) {
@@ -212,8 +238,11 @@ function handleRowChange(event) {
     }
     dose[field] = value;
   }
+  // Update the edited row in place instead of re-rendering the table, so the
+  // control keeps keyboard focus. Chromium fires "change" after each segment
+  // of a time field, so a re-render would also cut off a half-typed time.
+  elements.regimenBody.querySelector(`button[data-remove="${index}"]`)?.setAttribute("aria-label", removeLabel(dose));
   markPersonalized();
-  renderRows();
   recompute();
 }
 
@@ -263,7 +292,10 @@ function drawChart() {
   svg.push(`<rect width="${CHART.width}" height="${CHART.height}" fill="#ffffff"/>`);
 
   if (state.onThreshold !== null) {
-    svg.push(`<rect x="${CHART.left}" y="${yPosition(state.onThreshold)}" width="${CHART.right - CHART.left}" height="${CHART.bottom - yPosition(state.onThreshold)}" fill="#e7f3ec"/>`);
+    // Shade the target zone itself (target line up to the high-exposure line,
+    // or the top of the axis), in the zone strip's "at or above target" color.
+    const zoneTop = yPosition(state.dyskinesiaThreshold ?? yTop);
+    svg.push(`<rect x="${CHART.left}" y="${zoneTop}" width="${CHART.right - CHART.left}" height="${Math.max(0, yPosition(state.onThreshold) - zoneTop)}" fill="#e7f3ec"/>`);
   }
   if (state.dyskinesiaThreshold !== null) {
     svg.push(`<rect x="${CHART.left}" y="${CHART.top}" width="${CHART.right - CHART.left}" height="${Math.max(0, yPosition(state.dyskinesiaThreshold) - CHART.top)}" fill="#4b5560" opacity="0.14"/>`);
@@ -298,15 +330,15 @@ function drawChart() {
     for (let minute = 0; minute <= MINUTES_PER_DAY; minute += 2) {
       path.push(`${minute === 0 ? "M" : "L"}${xPosition(minute).toFixed(1)} ${yPosition(computed.series[index][minute]).toFixed(1)}`);
     }
-    const dash = DASH_PATTERNS[index % DASH_PATTERNS.length];
-    svg.push(`<path d="${path.join(" ")}" fill="none" stroke="${PALETTE[index % PALETTE.length]}" stroke-width="${curveWidth}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`);
+    const { color, dash } = curveStyle(index);
+    svg.push(`<path d="${path.join(" ")}" fill="none" stroke="${color}" stroke-width="${curveWidth}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`);
   });
 
   const totalPath = [];
   for (let minute = 0; minute <= MINUTES_PER_DAY; minute += 2) {
     totalPath.push(`${minute === 0 ? "M" : "L"}${xPosition(minute).toFixed(1)} ${yPosition(computed.total[minute]).toFixed(1)}`);
   }
-  svg.push(`<path d="${totalPath.join(" ")}" fill="none" stroke="#17202a" stroke-width="3"/>`);
+  svg.push(`<path d="${totalPath.join(" ")}" fill="none" stroke="${TOTAL_COLOR}" stroke-width="3"/>`);
 
   if (state.onThreshold !== null) {
     let runStart = 0;
@@ -342,6 +374,7 @@ function updateReadout(minute) {
   elements.readoutValue.textContent = String(round1(value));
   elements.readoutZone.textContent = zoneLabel(classification);
   elements.timeSlider.value = String(cursorMinute);
+  elements.timeSlider.setAttribute("aria-valuetext", time);
   elements.sliderTime.value = time;
   elements.sliderTime.textContent = time;
 
@@ -373,14 +406,19 @@ function updateReadout(minute) {
 }
 
 function renderLegend() {
-  const total = `<span class="legend-button" aria-label="Total exposure curve"><span class="legend-swatch" style="background:#17202a"></span><strong>Total</strong></span>`;
+  const focusedIndex = elements.legend.contains(document.activeElement)
+    ? document.activeElement.dataset.legendIndex
+    : undefined;
+  const total = `<span class="legend-button">${lineSwatch(TOTAL_COLOR, "", 3.5)}<strong>Total</strong></span>`;
+  // The visible text (name, time, dose) is each button's accessible name, so
+  // repeated doses of one drug stay distinguishable; aria-pressed = shown.
   const rows = state.doses.map((dose, index) => {
     const drug = DRUG_BY_ID[dose.drug];
     const name = drug.name.split(" — ")[0];
-    const time = ` ${dose.time}`;
-    return `<button type="button" class="legend-button" data-legend-index="${index}" aria-pressed="${!dose.hidden}" aria-label="${dose.hidden ? "Show" : "Hide"} ${escapeHtml(name)} curve">
-      <span class="legend-swatch" style="background:${PALETTE[index % PALETTE.length]}"></span>
-      ${escapeHtml(name)}${time} · ${dose.dose} mg
+    const { color, dash } = curveStyle(index);
+    return `<button type="button" class="legend-button" data-legend-index="${index}" aria-pressed="${!dose.hidden}">
+      ${lineSwatch(color, dash)}
+      ${escapeHtml(name)} ${dose.time} · ${dose.dose} mg
     </button>`;
   }).join("");
   elements.legend.innerHTML = total + rows;
@@ -392,6 +430,9 @@ function renderLegend() {
       recompute();
     });
   });
+  if (focusedIndex !== undefined) {
+    elements.legend.querySelector(`button[data-legend-index="${focusedIndex}"]`)?.focus();
+  }
 }
 
 function statCard(value, label, note = "") {
@@ -461,20 +502,25 @@ function prepareJson() {
   return text;
 }
 
+// Copy and Download always save the regimen as it is now. Reusing the text
+// box could save a stale export prepared before later edits.
 async function copyJson() {
-  const text = elements.regimenJson.value.trim() || prepareJson();
+  const text = prepareJson();
+  let copied = true;
   try {
     await navigator.clipboard.writeText(text);
   } catch {
     elements.regimenJson.focus();
     elements.regimenJson.select();
-    document.execCommand("copy");
+    copied = document.execCommand("copy");
   }
-  setMessage(elements.jsonMessage, "Regimen JSON copied.", true);
+  setMessage(elements.jsonMessage, copied
+    ? "Regimen JSON copied."
+    : "Copy was blocked by the browser. Select the text above and copy it manually.", copied);
 }
 
 function downloadJson() {
-  const text = elements.regimenJson.value.trim() || prepareJson();
+  const text = prepareJson();
   const blob = new Blob([text], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

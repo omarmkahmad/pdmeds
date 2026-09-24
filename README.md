@@ -29,6 +29,7 @@ Node.js 20 or newer is recommended.
 - Lets users define their own target and high-exposure thresholds without labeling them as clinical “on,” “off,” or dyskinesia states.
 - Imports and exports versioned JSON regimens; all calculations stay in the browser. Legacy exports still import; retired fields are ignored.
 - Includes keyboard-accessible chart exploration, toggleable medication curves, responsive tables, and textual source data.
+- Includes a separate printable dose time sheet (`schedule.html`) for marking dose hours, with a copy format for Epic notes. Names and marks live only in the open page and clear on reload; only the 12-/24-hour clock choice is saved in the browser.
 
 ## Model scope and safety
 
@@ -45,7 +46,9 @@ LEDD conversion factors follow Jost et al. (2023):
 - `app.js` — browser UI, chart rendering, and import/export flows
 - `src/drugs.js` — versioned medication parameters and references
 - `src/model.js` — validation, LEDD, exposure, and summary calculations
+- `schedule.html`, `schedule.css`, `schedule.js` — printable dose time sheet
 - `test/model.test.js` — model and regression tests
+- `test/csp.test.js` — guards against inline styles that the pages' Content Security Policy would block
 
 ## Deployment
 

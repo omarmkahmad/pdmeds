@@ -180,7 +180,8 @@ input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px 
 .button-primary { color: var(--paper); border-color: var(--accent-dark); background: var(--accent-dark); }
 .button-primary:hover { background: #002f53; }
 .remove-button { min-width: 44px; min-height: 44px; padding: 6px; color: var(--danger); }
-.curve-chip { display: inline-block; width: 18px; height: 5px; border: 1px solid rgb(0 0 0 / 0.2); }
+.curve-chip { display: inline-block; vertical-align: middle; }
+.line-swatch { display: block; width: 28px; height: 10px; flex: none; }
 
 .settings {
   display: grid;
@@ -234,7 +235,6 @@ input[aria-invalid="true"] { border-color: var(--danger); box-shadow: 0 0 0 1px 
   cursor: pointer;
 }
 .legend-button[aria-pressed="false"] { opacity: 0.52; text-decoration: line-through; }
-.legend-swatch { width: 20px; height: 4px; flex: none; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .stat { border: 1px solid var(--rule-light); border-left: 4px solid var(--accent); padding: 10px 12px; background: var(--panel); }
