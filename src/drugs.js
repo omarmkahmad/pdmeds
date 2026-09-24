@@ -1,10 +1,26 @@
-export const MODEL_VERSION = "3.0.0";
+export const MODEL_VERSION = "4.0.0";
 export const REGIMEN_SCHEMA_VERSION = 2;
 export const MINUTES_PER_DAY = 1440;
 export const LN2 = Math.log(2);
 export const LD_AUC = 60 / 2 + 81 / LN2;
 
-const JOST_2023 = "https://movementdisorders.onlinelibrary.wiley.com/doi/10.1002/mds.29410";
+// Sources for the curve fits and conversion factors. The single-dose
+// targets behind each fit are summarized in README.md ("Model evidence").
+const SOURCES = {
+  jost2023: { label: "Jost 2023 (LEDD factors)", url: "https://movementdisorders.onlinelibrary.wiley.com/doi/10.1002/mds.29410" },
+  modi2019: { label: "Modi 2019", url: "https://doi.org/10.1097/WNF.0000000000000314" },
+  hsu2015: { label: "Hsu 2015", url: "https://doi.org/10.1002/jcph.514" },
+  kuoppamaki2009: { label: "Kuoppamäki 2009", url: "https://doi.org/10.1007/s00228-009-0622-y" },
+  lewitt2023: { label: "LeWitt 2023", url: "https://doi.org/10.1016/j.prdoa.2023.100197" },
+  sinemetLabel: { label: "Sinemet label", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/017555s076lbl.pdf" },
+  sinemetCrLabel: { label: "Sinemet CR label", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/019856s029lbl.pdf" },
+  rytaryLabel: { label: "Rytary label", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/203312s026lbl.pdf" },
+  crexontLabel: { label: "Crexont label", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/217186s008lbl.pdf" },
+  inbrijaLabel: { label: "Inbrija label", url: "https://www.accessdata.fda.gov/drugsatfda_docs/label/2026/209184s013.pdf" },
+  fdaRytary: { label: "FDA review, NDA 203312", url: "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2015/203312Orig1s000ClinPharmR.pdf" },
+  fdaCrexont: { label: "FDA review, NDA 217186", url: "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2025/217186Orig1s000ClinPharmR.pdf" },
+  fdaInbrija: { label: "FDA review, NDA 209184", url: "https://www.accessdata.fda.gov/drugsatfda_docs/nda/2018/209184Orig1s000ClinPharmR.pdf" }
+};
 
 const factor = value => ({ kind: "factor", value });
 const components = (exposureFactor, values) => ({ kind: "components", exposureFactor, values });
@@ -20,9 +36,10 @@ export const DRUGS = [
       { id: "25/250", label: "25/250", levodopa: 250, halves: true }
     ],
     defaultStrength: "25/100", defaultCount: 1, maxCount: 8,
-    peaksText: "Peaks about 1 h after a dose", halfText: "half gone about 1½ h later",
-    isLevodopa: true, led: factor(1), exposure: components(1, [{ fraction: 1, weight: 1, peakTime: 60, halfLife: 81 }]),
-    model: "Tmax 60 min · T½ 81 min", evidence: "Referenced", source: "Kuoppamäki 2009; Turner"
+    peaksText: "Peaks about 1 h after a dose", halfText: "stays above half its peak for about 2 h",
+    isLevodopa: true, led: factor(1), exposure: components(1, [{ fraction: 1, peakTime: 60, halfLife: 81 }]),
+    model: "Rise to a peak at 60 min, then half-life 81 min. The reference curve: 100 mg peaks at 100.",
+    sources: [SOURCES.kuoppamaki2009, SOURCES.modi2019, SOURCES.sinemetLabel, SOURCES.jost2023]
   },
   {
     id: "sinemetcr", group: "Levodopa preparations", name: "Sinemet CR — levodopa/carbidopa CR", defaultDose: 100,
@@ -33,10 +50,10 @@ export const DRUGS = [
       { id: "50/200", label: "50/200", levodopa: 200, halves: true }
     ],
     defaultStrength: "50/200", defaultCount: 1, maxCount: 8,
-    peaksText: "Peaks about 2 h after a dose", halfText: "half gone about 2½ h later",
-    isLevodopa: true, led: factor(0.75), exposure: components(0.75, [{ fraction: 1, weight: 1, peakTime: 120, halfLife: 137 }]),
-    model: "Tmax 120 min · T½ 137 min · area normalized to LED ×0.75", evidence: "Consensus conversion",
-    source: "Jost 2023", sourceUrl: JOST_2023
+    peaksText: "Peaks about 2 h after a dose", halfText: "stays above half its peak for about 3¼ h",
+    isLevodopa: true, led: factor(0.75), exposure: components(0.85, [{ fraction: 1, peakTime: 120, halfLife: 137 }]),
+    model: "Rise to a peak at 120 min, then apparent half-life 137 min. Curve area 0.85 of the same mg of IR (published values range from 0.70 to 1.07).",
+    sources: [SOURCES.sinemetCrLabel, SOURCES.hsu2015, SOURCES.fdaCrexont, SOURCES.jost2023]
   },
   {
     id: "rytary", group: "Levodopa preparations", name: "Rytary — carbidopa/levodopa ER capsules", defaultDose: 245,
@@ -49,13 +66,13 @@ export const DRUGS = [
       { id: "61.25/245", label: "61.25/245", levodopa: 245, halves: false }
     ],
     defaultStrength: "61.25/245", defaultCount: 1, maxCount: 8,
-    peaksText: "Rises within about 1 h and peaks about 4½ h after a dose", halfText: "half gone about 2½ h later",
-    isLevodopa: true, led: factor(0.5), exposure: components(0.5, [
-      { fraction: 0.25, weight: 0.5, peakTime: 60, halfLife: 81 },
-      { fraction: 0.75, weight: 0.209, peakTime: 270, halfLife: 150 }
+    peaksText: "Rises within 1 h and peaks about 2½ h after a dose", halfText: "stays above half its peak for about 4 h",
+    isLevodopa: true, led: factor(0.5), exposure: components(0.7, [
+      { fraction: 0.27, peakTime: 60, halfLife: 81 },
+      { fraction: 0.73, peakTime: 140, halfLife: 160 }
     ]),
-    model: "IR 25% + ER 75% · area normalized to LED ×0.5", evidence: "Estimated shape; consensus conversion",
-    source: "Rytary PI; Jost 2023", sourceUrl: JOST_2023
+    model: "27% arrives like IR (peak 60 min, half-life 81 min) and 73% more slowly (peak 140 min, half-life 160 min). Curve area 0.70 of the same mg of IR (label). Fitted to single doses in advanced PD: about 3.9 h above half its peak, with a peak per mg about 0.35 of IR.",
+    sources: [SOURCES.modi2019, SOURCES.rytaryLabel, SOURCES.fdaRytary, SOURCES.jost2023]
   },
   {
     id: "crexont", group: "Levodopa preparations", name: "Crexont — carbidopa/levodopa ER (IPX-203)", defaultDose: 140,
@@ -68,13 +85,13 @@ export const DRUGS = [
       { id: "87.5/350", label: "87.5/350", levodopa: 350, halves: false }
     ],
     defaultStrength: "35/140", defaultCount: 1, maxCount: 8,
-    peaksText: "Peaks about 1 h after a dose", halfText: "half gone about 5 h later",
-    isLevodopa: true, led: factor(0.5), exposure: components(0.5, [
-      { fraction: 0.3, weight: 0.6, peakTime: 60, halfLife: 81 },
-      { fraction: 0.7, weight: 0.164, peakTime: 300, halfLife: 180 }
+    peaksText: "Rises within 1 h and peaks about 3 h after a dose", halfText: "stays above half its peak for about 4¾ h",
+    isLevodopa: true, led: factor(0.5), exposure: components(0.88, [
+      { fraction: 0.25, peakTime: 60, halfLife: 81 },
+      { fraction: 0.75, peakTime: 170, halfLife: 180 }
     ]),
-    model: "IR 30% + ER 70% · area normalized to assumed LED ×0.5", evidence: "Estimated",
-    source: "Crexont PI / RISE-PD; Rytary conversion used as an explicit assumption"
+    model: "25% immediate-release granules (peak 60 min, half-life 81 min) and 75% extended-release beads (peak 170 min, half-life 180 min), the label's split. Curve area 0.88 of the same mg of IR (label). Fitted to single doses in advanced PD: about 4.7 h above half its peak, with a peak per mg about 0.37 of IR.",
+    sources: [SOURCES.modi2019, SOURCES.crexontLabel, SOURCES.lewitt2023, SOURCES.fdaCrexont, SOURCES.jost2023]
   },
   {
     id: "inbrija", group: "Levodopa preparations", name: "Inbrija — levodopa inhalation powder", defaultDose: 84,
@@ -84,18 +101,13 @@ export const DRUGS = [
       { id: "42", label: "42 mg", levodopa: 42, halves: false }
     ],
     defaultStrength: "42", defaultCount: 2, maxCount: 2,
-    peaksText: "Peaks about 30 min after inhaling", halfText: "half gone about 2½ h later",
-    isLevodopa: true, led: factor(0.69), exposure: components(0.69, [{ fraction: 1, weight: 1, peakTime: 30, halfLife: 138 }]),
-    model: "Tmax 30 min · T½ 138 min · area normalized to LED ×0.69", evidence: "Estimated shape; consensus conversion",
-    source: "Inbrija PI; Jost 2023", sourceUrl: JOST_2023
+    peaksText: "Peaks about 30 min after inhaling", halfText: "stays above half its peak for about 2 h",
+    isLevodopa: true, led: factor(0.69), exposure: components(0.69, [{ fraction: 1, peakTime: 30, halfLife: 115 }]),
+    model: "Rise to a peak at 30 min, then half-life 115 min. Curve area 0.69 of the same mg of oral IR (label, per capsule mg).",
+    sources: [SOURCES.inbrijaLabel, SOURCES.fdaInbrija, SOURCES.jost2023]
   }
 ];
 
 export const DRUG_ORDER = ["sinemet", "sinemetcr", "rytary", "crexont", "inbrija"];
 
 export const DRUG_BY_ID = Object.assign(Object.create(null), Object.fromEntries(DRUGS.map(drug => [drug.id, drug])));
-
-export const PALETTE = [
-  "#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00",
-  "#56B4E9", "#8C510A", "#5E3C99", "#117733", "#882255"
-];

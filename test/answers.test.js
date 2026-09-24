@@ -386,9 +386,15 @@ test("headline S1 leaves out 'before the first dose' when the low is elsewhere",
 test("headline S3 with a target line, and its edge cases", () => {
   const analysis = analyzeDay(TEST_REGIMEN, { target: 100, high: null });
   const longest = analysis.below.reduce((best, range) => (range.minutes > best.minutes ? range : best));
-  assert.ok(longest.start > longest.end, "the longest stretch below 100 runs overnight");
   assert.equal(headlineSentences(analysis)[2],
     `Below your target line for ${formatDuration(analysis.belowMinutes)} a day; the longest stretch is ${rangeLabel(longest)}.`);
+  // With no evening dose, the longest stretch below the line crosses midnight.
+  const daytimeOnly = analyzeDay(["07:00", "11:00", "15:00", "19:00"].map((time, index) => (
+    { id: `ir${index}`, time, drug: "sinemet", strength: "25/100", count: 1, dose: 100 }
+  )), { target: 50, high: null });
+  const overnight = daytimeOnly.below.reduce((best, range) => (range.minutes > best.minutes ? range : best));
+  assert.ok(overnight.start > overnight.end, "the longest stretch runs across midnight");
+  assert.match(headlineSentences(daytimeOnly)[2], new RegExp(`the longest stretch is ${rangeLabel(overnight)}\\.$`));
   assert.equal(headlineSentences(analyzeDay(TEST_REGIMEN, { target: 1, high: null }))[2], "Never below your target line.");
   assert.equal(headlineSentences(analyzeDay(TEST_REGIMEN, { target: 1000, high: null }))[2], "Below your target line all day.");
   assert.equal(headlineSentences(analyzeDay(TEST_REGIMEN, { target: null, high: 100 })).length, 2, "a high line alone adds nothing");

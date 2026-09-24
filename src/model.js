@@ -212,23 +212,29 @@ export function calculateLedSummary(doses) {
   };
 }
 
-export function componentShapeAuc(component) {
-  return component.fraction * component.weight * (component.peakTime / 2 + component.halfLife / LN2);
+// Area under one component drawn with a peak of 1: the linear rise gives
+// peakTime / 2 and the exponential fall gives halfLife / ln 2.
+export function componentUnitArea(component) {
+  return component.peakTime / 2 + component.halfLife / LN2;
 }
 
-export function normalizedComponentPeaks(drug, targetExposureLed) {
+// Each component's `fraction` is its share of the curve's area (for an
+// extended-release product, the share of absorbed levodopa that arrives
+// through that part). The whole curve's area is exposureMg times the area of
+// a 1 mg immediate-release curve, so one 100 mg IR dose peaks at 100.
+export function normalizedComponentPeaks(drug, exposureMg) {
   if (drug.exposure.kind !== "components") return [];
-  const shapeAuc = drug.exposure.values.reduce((sum, component) => sum + componentShapeAuc(component), 0);
-  if (!(shapeAuc > 0) || !(targetExposureLed > 0)) return drug.exposure.values.map(() => 0);
-  const scale = targetExposureLed * LD_AUC / shapeAuc;
-  return drug.exposure.values.map(component => scale * component.fraction * component.weight);
+  if (!(exposureMg > 0)) return drug.exposure.values.map(() => 0);
+  return drug.exposure.values.map(component => (
+    exposureMg * LD_AUC * component.fraction / componentUnitArea(component)
+  ));
 }
 
-export function modeledInfiniteAuc(drug, targetExposureLed) {
+export function modeledInfiniteAuc(drug, exposureMg) {
   if (drug.exposure.kind !== "components") return null;
-  const peaks = normalizedComponentPeaks(drug, targetExposureLed);
+  const peaks = normalizedComponentPeaks(drug, exposureMg);
   return drug.exposure.values.reduce((sum, component, index) => (
-    sum + peaks[index] * (component.peakTime / 2 + component.halfLife / LN2)
+    sum + peaks[index] * componentUnitArea(component)
   ), 0);
 }
 
@@ -240,14 +246,15 @@ export function modeledInfiniteAuc(drug, targetExposureLed) {
 // result is the exact steady state of a schedule repeated daily.
 export function contributionAtMinute(dose, drug, minute) {
   if (!drug || !(dose.dose > 0) || !Number.isFinite(minute)) return 0;
-  const targetLed = dose.dose * drug.exposure.exposureFactor;
-  if (!(targetLed > 0) || !Number.isFinite(targetLed)) return 0;
+  // Levodopa that reaches the blood, in mg of immediate-release equivalent.
+  const exposureMg = dose.dose * drug.exposure.exposureFactor;
+  if (!(exposureMg > 0) || !Number.isFinite(exposureMg)) return 0;
 
   const doseMinute = toMinute(dose.time);
   if (!Number.isFinite(doseMinute)) return 0;
   let level = 0;
 
-  const peaks = normalizedComponentPeaks(drug, targetLed);
+  const peaks = normalizedComponentPeaks(drug, exposureMg);
   for (let day = 0; day < 2; day += 1) {
     const elapsed = minute - doseMinute + MINUTES_PER_DAY * day;
     if (elapsed < 0) continue;

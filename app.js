@@ -1372,15 +1372,16 @@ function renderDrugCards() {
     const strengths = drug.strengths.map(strength => strength.label).join(", ");
     const factor = drug.led.value;
     const status = drug.ledAssumed ? "assumed; borrowed from Rytary" : "consensus, Jost 2023";
-    const source = drug.sourceUrl
-      ? `<a href="${escapeHtml(drug.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(drug.source)}</a>`
-      : escapeHtml(drug.source);
+    const sources = drug.sources.map(source => (
+      `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)}</a>`
+    )).join(", ");
     return `<div class="drug-card">
       <h4>${lineSwatch(drug.style)}${escapeHtml(drug.shortName)}</h4>
       <p>${escapeHtml(drug.generic)}. Strengths ${escapeHtml(strengths)}.</p>
       <p>${escapeHtml(drug.peaksText)}; ${escapeHtml(drug.halfText)}.</p>
+      <p>Curve: ${escapeHtml(drug.model)}</p>
       <p>LEDD factor ×${factor} (${status}).</p>
-      <p>Source: ${source}</p>
+      <p>Sources: ${sources}</p>
     </div>`;
   }).join("");
   els.references.innerHTML = REFERENCES.map(reference => `<li>${escapeHtml(reference)}</li>`).join("");
