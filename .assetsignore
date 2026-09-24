@@ -1,4 +1,7 @@
 .git
+.github
 LICENSE
 README.md
+package.json
+test
 wrangler.jsonc

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "modelVersion": "2.0.0",
+  "exportedAt": "2026-08-14T02:10:00.000Z",
+  "days": 3,
+  "doses": [
+    { "t": "07:30", "drug": "sinemet", "dose": 100 },
+    { "t": "11:30", "drug": "sinemet", "dose": 100, "hidden": true },
+    { "time": "15:30", "drug": "sinemetcr", "dose": 200, "hidden": true },
+    { "drug": "rytary", "dose": 245 }
+  ],
+  "onThr": 50,
+  "dysThr": 45,
+  "comt": "none"
+}

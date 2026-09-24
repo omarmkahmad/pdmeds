@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 3,
+  "modelVersion": "4.0.0",
+  "exportedAt": "2027-03-01T10:00:00.000Z",
+  "doses": [
+    { "time": "08:00", "drug": "sinemet", "dose": 100, "strength": "25/100", "count": 1 }
+  ],
+  "onThreshold": null,
+  "dyskinesiaThreshold": null
+}

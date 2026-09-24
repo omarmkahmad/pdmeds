@@ -6,10 +6,19 @@ import {
   MODEL_VERSION,
   REGIMEN_SCHEMA_VERSION
 } from "./drugs.js";
+import { countStep, doseMg, inferStrength, strengthOf, validateCount } from "./amounts.js";
 
 export const MAX_DOSES = 64;
 export const MAX_DOSE_MG = 20000;
 export const MAX_THRESHOLD = 20000;
+
+const EPSILON = 1e-6;
+const NOT_A_SCHEDULE = "This isn't a schedule file.";
+const NEWER_VERSION = "This file was made by a newer version of the Explorer. Reload the page and try again.";
+const DAYS_NOTE = "The old \"days\" setting is no longer used.";
+const DOSE_LIMIT = `${MAX_DOSES} doses is the limit.`;
+// Longest time text quoted back in an error; longer text reads "A dose".
+const MAX_NAMED_TIME = 16;
 
 export class ModelValidationError extends Error {
   constructor(messages) {
@@ -45,93 +54,149 @@ export function formatDuration(value) {
   return `${remainder} min`;
 }
 
-function finiteNumber(value, { label, minimum = 0, maximum, nullable = false, integer = false }, errors) {
-  if ((value === "" || value === null || value === undefined) && nullable) return null;
-  const number = Number(value);
-  if (!Number.isFinite(number)) {
-    errors.push(`${label} must be a finite number.`);
-    return nullable ? null : minimum;
-  }
-  if (number < minimum || (maximum !== undefined && number > maximum)) {
-    errors.push(`${label} must be between ${minimum} and ${maximum}.`);
-  }
-  if (integer && !Number.isInteger(number)) errors.push(`${label} must be a whole number.`);
-  return Math.min(maximum ?? number, Math.max(minimum, integer ? Math.round(number) : number));
+function isPositive(value) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
+function countOf(count, one, many) {
+  return `${count.toLocaleString("en-US")} ${count === 1 ? one : many}`;
+}
+
+function isAbsent(value) {
+  return value === undefined || value === null;
+}
+
+// A number from a file: null when blank, NaN when unreadable. Numeric strings
+// are read as numbers, as the old importer did.
+function readNumber(value) {
+  if (isAbsent(value)) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const number = typeof value === "string" ? Number(value) : value;
+  return typeof number === "number" && Number.isFinite(number) ? number : Number.NaN;
+}
+
+function readLine(value, name, errors) {
+  const number = readNumber(value);
+  if (number === null) return null;
+  if (Number.isNaN(number) || number < 0 || number > MAX_THRESHOLD) {
+    errors.push(`The ${name} must be a level from 0 to ${MAX_THRESHOLD.toLocaleString("en-US")}.`);
+    return null;
+  }
+  // 0 means not set.
+  return number > 0 ? number : null;
+}
+
+// Each line is optional and independent. A high line at or below the target
+// (or without one) is a UI note, not an error.
 export function validateThresholds(onThreshold, dyskinesiaThreshold) {
   const errors = [];
-  const on = finiteNumber(onThreshold, {
-    label: "Target threshold", minimum: 0, maximum: MAX_THRESHOLD, nullable: true
-  }, errors);
-  const dyskinesia = finiteNumber(dyskinesiaThreshold, {
-    label: "High-exposure threshold", minimum: 0, maximum: MAX_THRESHOLD, nullable: true
-  }, errors);
-  if (dyskinesia !== null && on === null) {
-    errors.push("Set a target threshold before setting a high-exposure threshold.");
+  const on = readLine(onThreshold, "target line", errors);
+  const high = readLine(dyskinesiaThreshold, "high line", errors);
+  return { onThreshold: on, dyskinesiaThreshold: high, errors };
+}
+
+// The file's schema version, or null for the oldest files, which have none.
+function readSchemaVersion(version) {
+  if (isAbsent(version)) return null;
+  const number = readNumber(version);
+  if (number > REGIMEN_SCHEMA_VERSION) throw new ModelValidationError([NEWER_VERSION]);
+  if (!Number.isInteger(number) || number < 1) throw new ModelValidationError([NOT_A_SCHEDULE]);
+  return number;
+}
+
+// Errors name a dose by the time written in the file, never by row number.
+function doseName(time) {
+  let text = "";
+  if (typeof time === "string") text = time.trim();
+  else if (typeof time === "number" && Number.isFinite(time)) text = String(time);
+  return text && text.length <= MAX_NAMED_TIME ? `The ${text} dose` : "A dose";
+}
+
+// Strength and count are kept only when the strength belongs to the drug, the
+// count fits its step and range, and together they give the dose. Otherwise
+// they are worked out from the mg, and no exact fit means mg mode.
+// From schema 2 on, a dose saved with neither was in mg mode, so it stays in
+// mg mode even when a strength fits (so the file survives a round trip).
+function amountFields(drug, raw, dose, savesMode) {
+  if (dose === null) return { strength: null, count: null };
+  if (savesMode && isAbsent(raw.strength) && isAbsent(raw.count)) return { strength: null, count: null };
+  const strength = strengthOf(drug, raw.strength);
+  if (strength && typeof raw.count === "number" && validateCount(drug, strength.id, raw.count) === null) {
+    const step = countStep(drug, strength.id);
+    const count = Math.round(raw.count / step) * step;
+    if (Math.abs(doseMg(drug, strength.id, count) - dose) < EPSILON) return { strength: strength.id, count };
   }
-  if (on !== null && dyskinesia !== null && dyskinesia <= on) {
-    errors.push("High-exposure threshold must be greater than the target threshold.");
+  const inferred = inferStrength(drug, dose);
+  return inferred ? { strength: inferred.strength, count: inferred.count } : { strength: null, count: null };
+}
+
+function readDose(raw, savesMode, errors) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    errors.push("A dose in this file can't be read.");
+    return null;
   }
-  return { onThreshold: on, dyskinesiaThreshold: dyskinesia, errors };
+  const time = raw.time ?? raw.t ?? "08:00";
+  const name = doseName(time);
+  const timeOk = isValidTime(time);
+  if (!timeOk) errors.push(`${name} has a time that can't be read.`);
+  const drug = typeof raw.drug === "string" ? DRUG_BY_ID[raw.drug] : undefined;
+  if (!drug) errors.push(`${name} has an unknown medicine.`);
+  const amount = readNumber(raw.dose);
+  if (Number.isNaN(amount)) {
+    errors.push(`${name} has an amount that can't be read.`);
+  } else if (amount !== null && (amount < 0 || amount > MAX_DOSE_MG)) {
+    errors.push(`${name} has an amount outside 0 to ${MAX_DOSE_MG.toLocaleString("en-US")} mg.`);
+  }
+  if (!timeOk || !drug || Number.isNaN(amount)) return null;
+  // 0, blank and missing all mean "no amount yet" (never 0).
+  const dose = isPositive(amount) && amount <= MAX_DOSE_MG ? amount : null;
+  return { time, drug: drug.id, ...amountFields(drug, raw, dose, savesMode), dose };
 }
 
 export function validateRegimenPayload(payload) {
-  const errors = [];
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    throw new ModelValidationError(["Regimen must be a JSON object."]);
+    throw new ModelValidationError([NOT_A_SCHEDULE]);
   }
-  if (!Array.isArray(payload.doses)) {
-    throw new ModelValidationError(["Regimen must contain a doses array."]);
-  }
+  // Checked first: a newer file may not have a doses array at all.
+  const version = readSchemaVersion(payload.schemaVersion);
+  if (!Array.isArray(payload.doses)) throw new ModelValidationError([NOT_A_SCHEDULE]);
   if (payload.doses.length > MAX_DOSES) {
-    throw new ModelValidationError([`A regimen can contain at most ${MAX_DOSES} rows.`]);
+    throw new ModelValidationError([`This file has ${countOf(payload.doses.length, "dose", "doses")}. ${DOSE_LIMIT}`]);
   }
 
-  const doses = payload.doses.map((rawDose, index) => {
-    const row = index + 1;
-    if (!rawDose || typeof rawDose !== "object" || Array.isArray(rawDose)) {
-      errors.push(`Row ${row} must be an object.`);
-      return null;
-    }
-    const drug = DRUG_BY_ID[rawDose.drug];
-    if (!drug) errors.push(`Row ${row} has an unknown drug.`);
-    const time = rawDose.time ?? rawDose.t ?? "08:00";
-    if (!isValidTime(time)) errors.push(`Row ${row} has an invalid time.`);
-    const dose = finiteNumber(rawDose.dose, {
-      label: `Row ${row} dose`, minimum: 0, maximum: MAX_DOSE_MG
-    }, errors);
-    return drug ? {
-      time: isValidTime(time) ? time : "08:00",
-      drug: drug.id,
-      dose,
-      hidden: Boolean(rawDose.hidden)
-    } : null;
-  }).filter(Boolean);
-
+  const errors = [];
+  const savesMode = version !== null && version >= 2;
+  const read = payload.doses.map(raw => readDose(raw, savesMode, errors));
   const thresholds = validateThresholds(
     payload.onThreshold ?? payload.onThr ?? null,
     payload.dyskinesiaThreshold ?? payload.dysThr ?? null
   );
   errors.push(...thresholds.errors);
+  if (errors.length) throw new ModelValidationError([...new Set(errors)]);
 
-  const days = finiteNumber(payload.days ?? 2, {
-    label: "Days in treatment", minimum: 1, maximum: 7, integer: true
-  }, errors);
-  if (errors.length) throw new ModelValidationError(errors);
+  const doses = read.map((dose, index) => ({ id: `d${index + 1}`, ...dose }));
+  const notes = [];
+  // The model always shows a day that repeats, so "days" has no meaning now.
+  if (payload.days !== undefined && payload.days !== null) notes.push(DAYS_NOTE);
+  const hidden = payload.doses.filter(raw => Boolean(raw.hidden)).length;
+  if (hidden) {
+    notes.push(`This file had ${countOf(hidden, "dose", "doses")} hidden from the total. All doses now count.`);
+  }
+  const missing = doses.filter(dose => dose.dose === null).length;
+  if (missing) notes.push(`${countOf(missing, "dose", "doses")} had no amount. Add one to count it.`);
 
   return {
     doses,
     onThreshold: thresholds.onThreshold,
     dyskinesiaThreshold: thresholds.dyskinesiaThreshold,
-    days,
-    example: Boolean(payload.example)
+    example: payload.example === true,
+    notes
   };
 }
 
 export function calculateLedSummary(doses) {
   if (!Array.isArray(doses) || doses.length > MAX_DOSES) {
-    throw new ModelValidationError([`A regimen can contain at most ${MAX_DOSES} rows.`]);
+    throw new ModelValidationError([DOSE_LIMIT]);
   }
   const rows = doses.map((dose, index) => {
     const drug = DRUG_BY_ID[dose.drug];
@@ -147,38 +212,50 @@ export function calculateLedSummary(doses) {
   };
 }
 
-export function componentShapeAuc(component) {
-  return component.fraction * component.weight * (component.peakTime / 2 + component.halfLife / LN2);
+// Area under one component drawn with a peak of 1: the linear rise gives
+// peakTime / 2 and the exponential fall gives halfLife / ln 2.
+export function componentUnitArea(component) {
+  return component.peakTime / 2 + component.halfLife / LN2;
 }
 
-export function normalizedComponentPeaks(drug, targetExposureLed) {
+// Each component's `fraction` is its share of the curve's area (for an
+// extended-release product, the share of absorbed levodopa that arrives
+// through that part). The whole curve's area is exposureMg times the area of
+// a 1 mg immediate-release curve, so one 100 mg IR dose peaks at 100.
+export function normalizedComponentPeaks(drug, exposureMg) {
   if (drug.exposure.kind !== "components") return [];
-  const shapeAuc = drug.exposure.values.reduce((sum, component) => sum + componentShapeAuc(component), 0);
-  if (!(shapeAuc > 0) || !(targetExposureLed > 0)) return drug.exposure.values.map(() => 0);
-  const scale = targetExposureLed * LD_AUC / shapeAuc;
-  return drug.exposure.values.map(component => scale * component.fraction * component.weight);
+  if (!(exposureMg > 0)) return drug.exposure.values.map(() => 0);
+  return drug.exposure.values.map(component => (
+    exposureMg * LD_AUC * component.fraction / componentUnitArea(component)
+  ));
 }
 
-export function modeledInfiniteAuc(drug, targetExposureLed) {
+export function modeledInfiniteAuc(drug, exposureMg) {
   if (drug.exposure.kind !== "components") return null;
-  const peaks = normalizedComponentPeaks(drug, targetExposureLed);
+  const peaks = normalizedComponentPeaks(drug, exposureMg);
   return drug.exposure.values.reduce((sum, component, index) => (
-    sum + peaks[index] * (component.peakTime / 2 + component.halfLife / LN2)
+    sum + peaks[index] * componentUnitArea(component)
   ), 0);
 }
 
-export function contributionAtMinute(dose, drug, minute, state) {
+// The schedule repeats every day, so each dose also contributes from the
+// same clock time on every earlier day. Today's and yesterday's doses are
+// summed directly. Doses from two or more days back are all past their peak
+// (every peakTime is under a day), so their decaying tails form a geometric
+// series with ratio 0.5^(1440 / halfLife), added here in closed form. The
+// result is the exact steady state of a schedule repeated daily.
+export function contributionAtMinute(dose, drug, minute) {
   if (!drug || !(dose.dose > 0) || !Number.isFinite(minute)) return 0;
-  const targetLed = dose.dose * drug.exposure.exposureFactor;
-  if (!(targetLed > 0) || !Number.isFinite(targetLed)) return 0;
+  // Levodopa that reaches the blood, in mg of immediate-release equivalent.
+  const exposureMg = dose.dose * drug.exposure.exposureFactor;
+  if (!(exposureMg > 0) || !Number.isFinite(exposureMg)) return 0;
 
   const doseMinute = toMinute(dose.time);
   if (!Number.isFinite(doseMinute)) return 0;
-  const days = Math.min(7, Math.max(1, state.days));
   let level = 0;
 
-  const peaks = normalizedComponentPeaks(drug, targetLed);
-  for (let day = 0; day < days; day += 1) {
+  const peaks = normalizedComponentPeaks(drug, exposureMg);
+  for (let day = 0; day < 2; day += 1) {
     const elapsed = minute - doseMinute + MINUTES_PER_DAY * day;
     if (elapsed < 0) continue;
     drug.exposure.values.forEach((component, index) => {
@@ -192,32 +269,38 @@ export function contributionAtMinute(dose, drug, minute, state) {
       }
     });
   }
+  const elapsedTwoDaysBack = minute - doseMinute + 2 * MINUTES_PER_DAY;
+  drug.exposure.values.forEach((component, index) => {
+    const dailyRatio = Math.pow(0.5, MINUTES_PER_DAY / component.halfLife);
+    level += peaks[index] * Math.pow(
+      0.5,
+      (elapsedTwoDaysBack - Math.max(component.peakTime, 0)) / component.halfLife
+    ) / (1 - dailyRatio);
+  });
   return level;
 }
 
+// Every dose counts. A dose without an amount (dose not > 0) keeps an
+// all-zero series and adds nothing to the total.
 export function computeDay(state) {
   if (!state || !Array.isArray(state.doses) || state.doses.length > MAX_DOSES) {
-    throw new ModelValidationError([`A regimen can contain at most ${MAX_DOSES} rows.`]);
+    throw new ModelValidationError([DOSE_LIMIT]);
   }
   const led = calculateLedSummary(state.doses);
   const series = state.doses.map(() => new Float64Array(MINUTES_PER_DAY + 1));
   const total = new Float64Array(MINUTES_PER_DAY + 1);
 
-  for (let minute = 0; minute <= MINUTES_PER_DAY; minute += 1) {
-    let sum = 0;
-    state.doses.forEach((dose, index) => {
-      const value = contributionAtMinute(
-        dose,
-        DRUG_BY_ID[dose.drug],
-        minute,
-        state
-      );
-      if (!Number.isFinite(value)) throw new ModelValidationError([`Row ${index + 1} produced a non-finite result.`]);
-      series[index][minute] = value;
-      if (!dose.hidden) sum += value;
-    });
-    total[minute] = sum;
-  }
+  state.doses.forEach((dose, index) => {
+    if (!isPositive(dose.dose)) return;
+    const drug = DRUG_BY_ID[dose.drug];
+    const values = series[index];
+    for (let minute = 0; minute <= MINUTES_PER_DAY; minute += 1) {
+      const value = contributionAtMinute(dose, drug, minute);
+      if (!Number.isFinite(value)) throw new ModelValidationError([`The ${dose.time} dose produced a non-finite result.`]);
+      values[minute] = value;
+      total[minute] += value;
+    }
+  });
 
   let maximum = 0;
   let maximumMinute = 0;
@@ -285,19 +368,26 @@ export function calculateStatistics(computed, state) {
   return result;
 }
 
+// Schema 2. The levodopa mg stays the source of truth; strength and count are
+// written only when set (not in mg mode). Doses without an amount are left
+// out, and ids, days, hidden and the pin are never written.
 export function exportRegimen(state) {
+  const doses = (Array.isArray(state?.doses) ? state.doses : [])
+    .filter(dose => dose && isPositive(dose.dose))
+    .map(dose => {
+      const entry = { time: dose.time, drug: dose.drug, dose: dose.dose };
+      if (typeof dose.strength === "string" && dose.strength && isPositive(dose.count)) {
+        entry.strength = dose.strength;
+        entry.count = dose.count;
+      }
+      return entry;
+    });
   return {
     schemaVersion: REGIMEN_SCHEMA_VERSION,
     modelVersion: MODEL_VERSION,
     exportedAt: new Date().toISOString(),
-    doses: state.doses.map(dose => ({
-      time: dose.time,
-      drug: dose.drug,
-      dose: dose.dose,
-      ...(dose.hidden ? { hidden: true } : {})
-    })),
-    onThreshold: state.onThreshold,
-    dyskinesiaThreshold: state.dyskinesiaThreshold,
-    days: state.days
+    doses,
+    onThreshold: isPositive(state?.onThreshold) ? state.onThreshold : null,
+    dyskinesiaThreshold: isPositive(state?.dyskinesiaThreshold) ? state.dyskinesiaThreshold : null
   };
 }
