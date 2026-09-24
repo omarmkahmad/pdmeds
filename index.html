@@ -71,13 +71,9 @@
               <label for="dyskinesiaThreshold">High-exposure threshold <span>(relative units)</span></label>
               <input type="number" id="dyskinesiaThreshold" min="0" max="20000" step="5" inputmode="decimal" placeholder="e.g. 120">
             </div>
-            <div class="field field-small">
-              <label for="days">Days represented</label>
-              <input type="number" id="days" min="1" max="7" step="1" inputmode="numeric" value="2">
-            </div>
           </fieldset>
           <p class="form-message" id="formMessage" role="alert"></p>
-          <p class="hint">“Days represented” adds prior-day carryover for longer-half-life preparations. Thresholds are optional and user-defined; they are not validated clinical On/Off or dyskinesia cutoffs.</p>
+          <p class="hint">The schedule is treated as repeating every day, so last night’s doses carry into the morning. Thresholds are optional and user-defined; they are not validated clinical On/Off or dyskinesia cutoffs.</p>
         </div>
       </section>
 

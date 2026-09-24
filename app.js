@@ -38,7 +38,6 @@ const elements = {
   clearRegimen: $("clearRegimen"),
   onThreshold: $("onThreshold"),
   dyskinesiaThreshold: $("dyskinesiaThreshold"),
-  days: $("days"),
   formMessage: $("formMessage"),
   readoutTime: $("readoutTime"),
   readoutValue: $("readoutValue"),
@@ -58,7 +57,7 @@ const elements = {
   parameterBody: $("parameterBody")
 };
 
-let state = validateRegimenPayload({ doses: [], days: 2 });
+let state = validateRegimenPayload({ doses: [] });
 let computed = null;
 let cursorMinute = 0;
 
@@ -129,7 +128,6 @@ function markPersonalized() {
 function synchronizeSettings() {
   elements.onThreshold.value = state.onThreshold ?? "";
   elements.dyskinesiaThreshold.value = state.dyskinesiaThreshold ?? "";
-  elements.days.value = state.days;
   elements.exampleBadge.hidden = !state.example;
 }
 
@@ -576,7 +574,6 @@ elements.loadExample.addEventListener("click", () => {
     ],
     onThreshold: 50,
     dyskinesiaThreshold: 120,
-    days: 2,
     example: true
   });
   cursorMinute = 0;
@@ -598,20 +595,6 @@ elements.clearRegimen.addEventListener("click", () => {
 
 elements.onThreshold.addEventListener("change", applyThresholdSettings);
 elements.dyskinesiaThreshold.addEventListener("change", applyThresholdSettings);
-elements.days.addEventListener("change", () => {
-  const value = Number(elements.days.value);
-  if (!Number.isInteger(value) || value < 1 || value > 7) {
-    elements.days.setAttribute("aria-invalid", "true");
-    elements.days.value = state.days;
-    setMessage(elements.formMessage, "Days represented must be a whole number from 1 to 7.");
-    return;
-  }
-  elements.days.removeAttribute("aria-invalid");
-  state.days = value;
-  markPersonalized();
-  setMessage(elements.formMessage);
-  recompute();
-});
 
 elements.timeSlider.addEventListener("input", () => updateReadout(Number(elements.timeSlider.value)));
 elements.timeSlider.addEventListener("keydown", event => {

@@ -114,17 +114,14 @@ export function validateRegimenPayload(payload) {
     payload.dyskinesiaThreshold ?? payload.dysThr ?? null
   );
   errors.push(...thresholds.errors);
-
-  const days = finiteNumber(payload.days ?? 2, {
-    label: "Days in treatment", minimum: 1, maximum: 7, integer: true
-  }, errors);
+  // Older exports carry a "days" field; the model now always shows a
+  // repeating daily schedule, so it is ignored.
   if (errors.length) throw new ModelValidationError(errors);
 
   return {
     doses,
     onThreshold: thresholds.onThreshold,
     dyskinesiaThreshold: thresholds.dyskinesiaThreshold,
-    days,
     example: Boolean(payload.example)
   };
 }
@@ -167,18 +164,23 @@ export function modeledInfiniteAuc(drug, targetExposureLed) {
   ), 0);
 }
 
-export function contributionAtMinute(dose, drug, minute, state) {
+// The schedule repeats every day, so each dose also contributes from the
+// same clock time on every earlier day. Today's and yesterday's doses are
+// summed directly. Doses from two or more days back are all past their peak
+// (every peakTime is under a day), so their decaying tails form a geometric
+// series with ratio 0.5^(1440 / halfLife), added here in closed form. The
+// result is the exact steady state of a schedule repeated daily.
+export function contributionAtMinute(dose, drug, minute) {
   if (!drug || !(dose.dose > 0) || !Number.isFinite(minute)) return 0;
   const targetLed = dose.dose * drug.exposure.exposureFactor;
   if (!(targetLed > 0) || !Number.isFinite(targetLed)) return 0;
 
   const doseMinute = toMinute(dose.time);
   if (!Number.isFinite(doseMinute)) return 0;
-  const days = Math.min(7, Math.max(1, state.days));
   let level = 0;
 
   const peaks = normalizedComponentPeaks(drug, targetLed);
-  for (let day = 0; day < days; day += 1) {
+  for (let day = 0; day < 2; day += 1) {
     const elapsed = minute - doseMinute + MINUTES_PER_DAY * day;
     if (elapsed < 0) continue;
     drug.exposure.values.forEach((component, index) => {
@@ -192,6 +194,14 @@ export function contributionAtMinute(dose, drug, minute, state) {
       }
     });
   }
+  const elapsedTwoDaysBack = minute - doseMinute + 2 * MINUTES_PER_DAY;
+  drug.exposure.values.forEach((component, index) => {
+    const dailyRatio = Math.pow(0.5, MINUTES_PER_DAY / component.halfLife);
+    level += peaks[index] * Math.pow(
+      0.5,
+      (elapsedTwoDaysBack - Math.max(component.peakTime, 0)) / component.halfLife
+    ) / (1 - dailyRatio);
+  });
   return level;
 }
 
@@ -206,12 +216,7 @@ export function computeDay(state) {
   for (let minute = 0; minute <= MINUTES_PER_DAY; minute += 1) {
     let sum = 0;
     state.doses.forEach((dose, index) => {
-      const value = contributionAtMinute(
-        dose,
-        DRUG_BY_ID[dose.drug],
-        minute,
-        state
-      );
+      const value = contributionAtMinute(dose, DRUG_BY_ID[dose.drug], minute);
       if (!Number.isFinite(value)) throw new ModelValidationError([`Row ${index + 1} produced a non-finite result.`]);
       series[index][minute] = value;
       if (!dose.hidden) sum += value;
@@ -297,7 +302,6 @@ export function exportRegimen(state) {
       ...(dose.hidden ? { hidden: true } : {})
     })),
     onThreshold: state.onThreshold,
-    dyskinesiaThreshold: state.dyskinesiaThreshold,
-    days: state.days
+    dyskinesiaThreshold: state.dyskinesiaThreshold
   };
 }
