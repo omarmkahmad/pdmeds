@@ -1,4 +1,4 @@
-import { DRUGS, DRUG_BY_ID, DRUG_ORDER, MODEL_VERSION } from "./src/drugs.js";
+import { AMANTADINE_ORDER, DRUG_BY_ID, DRUG_ORDER, MEDICINE_ORDER, MODEL_VERSION, analyteOf, ledPerMg } from "./src/drugs.js";
 import {
   MAX_DOSES,
   ModelValidationError,
@@ -18,18 +18,26 @@ import {
 import {
   amountLabel,
   countStep,
+  dailyTotalText,
   dailyTotals,
   doseMg,
+  hasMgMode,
   largeDoseNote,
   ledText,
   medicineChange,
   minCount,
   nextDoseDefaults,
   parseMg,
+  strengthMg,
   strengthOf,
   validateCount
 } from "./src/amounts.js";
 import {
+  amantadineDesc,
+  amantadinePanel,
+  amantadineReadout,
+  amantadineSentences,
+  amantadineValueText,
   analyzeDay,
   answerBarLow,
   buildSheetRows,
@@ -37,6 +45,7 @@ import {
   compareModel,
   headlineSentences,
   hourlyRows,
+  ngText,
   pinSnapshot,
   rangeText,
   readoutText,
@@ -65,7 +74,8 @@ const REFERENCES = [
   "Wach A, Kopra J, Marjanovic I, Knecht M, Jenner P. Population pharmacokinetic analyses comparing immediate-release levodopa/carbidopa, controlled-release levodopa/carbidopa, and IPX203. Findings from a phase 1 study in healthy volunteers. J Neural Transm. 2026. doi:10.1007/s00702-026-03233-w.",
   "Nutt JG. Pharmacokinetics and pharmacodynamics of levodopa. Mov Disord. 2008;23(Suppl 3):S580–S584. doi:10.1002/mds.22037.",
   "Contin M, Martinelli P. Pharmacokinetics of levodopa. J Neurol. 2010;257(Suppl 2):S253–S261. doi:10.1007/s00415-010-5728-8.",
-  "US prescribing information: Sinemet, Sinemet CR, Rytary, Crexont, and Inbrija (accessdata.fda.gov), and the FDA clinical pharmacology reviews for NDA 203312 (Rytary), 217186 (Crexont), and 209184 (Inbrija)."
+  "Hauser RA, Pahwa R, Wargin WA, et al. Pharmacokinetics of ADS-5102 (amantadine) extended release capsules administered once daily at bedtime for the treatment of dyskinesia. Clin Pharmacokinet. 2019;58(1):77–88. doi:10.1007/s40262-018-0663-4.",
+  "US prescribing information: Sinemet, Sinemet CR, Rytary, Crexont, Inbrija, Gocovri, and amantadine hydrochloride (Symmetrel) (accessdata.fda.gov), and the FDA reviews for NDA 203312 (Rytary), 217186 (Crexont), 209184 (Inbrija), and 208944 (Gocovri)."
 ];
 
 const wideQuery = window.matchMedia("(min-width: 820px)");
@@ -86,7 +96,10 @@ const ui = {
   openId: null,
   isNew: false,
   editSnapshot: null,
-  intendedMg: null,
+  // The amount the user means, kept per dose basis (levodopa mg, amantadine
+  // HCl mg, Gocovri's amantadine mg) so a look at another medicine and back
+  // returns to it.
+  intended: {},
   notes: {},
   pinned: null,
   undo: null,
@@ -101,6 +114,7 @@ const ui = {
 
 let analysis = null;
 let chart = null;
+let amantadineChart = null;
 let statusTimer = null;
 let pendingSheet = null;
 
@@ -136,9 +150,19 @@ const els = {
   compareSentence: $("compareSentence"),
   tiles: $("tiles"),
   tileTip: $("tip-tiles"),
+  levodopaTop: $("levodopaTop"),
+  levodopaBottom: $("levodopaBottom"),
+  levodopaNone: $("levodopaNone"),
   readout: $("readout"),
   chart: $("chart"),
   chartDesc: $("chartDesc"),
+  amantadineBlock: $("amantadineBlock"),
+  amantadineSummary: $("amantadineSummary"),
+  amantadineReadout: $("amantadineReadout"),
+  amantadineChart: $("amantadineChart"),
+  amantadineDesc: $("amantadineDesc"),
+  amantadineTableWrap: $("amantadineTableWrap"),
+  amantadineBody: $("amantadineBody"),
   slider: $("timeSlider"),
   sliderHint: $("sliderHint"),
   chartKey: $("chartKey"),
@@ -175,6 +199,8 @@ const els = {
 /* ---------- Small helpers ---------- */
 
 const drugOf = dose => DRUG_BY_ID[dose.drug];
+const isLevodopa = drug => analyteOf(drug) === "levodopa";
+const capitalize = text => text[0].toUpperCase() + text.slice(1);
 const hasAmount = dose => dose.dose !== null && dose.dose > 0;
 const doseById = id => state.doses.find(dose => dose.id === id) ?? null;
 const minuteOf = time => {
@@ -246,7 +272,7 @@ function countLabels(drug, strengthId) {
   const unit = drug.unit;
   const half = countStep(drug, strengthId) === 0.5;
   return {
-    label: unit[1][0].toUpperCase() + unit[1].slice(1),
+    label: capitalize(unit[1]),
     minus: half ? `Half a ${unit[0]} fewer` : `One ${unit[0]} fewer`,
     plus: half ? `Half a ${unit[0]} more` : `One ${unit[0]} more`
   };
@@ -261,21 +287,27 @@ function editorHtml(dose) {
   const id = dose.id;
   const drug = drugOf(dose);
   const mgMode = dose.strength === null;
-  const isInbrija = drug.id === "inbrija";
+  const levodopa = isLevodopa(drug);
+  // One strength and no "Other amount (mg)" (Inbrija): nothing to choose.
+  const fixedStrength = !hasMgMode(drug) && !mgMode;
   const labels = countLabels(drug, dose.strength);
   const legend = ui.isNew ? "New dose" : `Edit the ${doseTitle(dose)} dose`;
   const notes = ui.notes;
   const timeText = ui.pendingTimeText ?? dose.time;
   const timeEcho = ui.pendingTimeText === null ? "" : describeTimeInput(ui.pendingTimeText).message;
-  const chips = DRUG_ORDER.map(drugId => {
+  const chip = drugId => {
     const option = DRUG_BY_ID[drugId];
     return `<label class="chip"><input type="radio" name="drug-${id}" value="${drugId}"${drugId === dose.drug ? " checked" : ""}><span class="check" aria-hidden="true">✓</span>${escapeHtml(option.shortName)}</label>`;
-  }).join("");
-  const strengthField = isInbrija && !mgMode
-    ? `<div class="field"><span class="editor-label">Capsule strength</span><span class="static-strength">42 mg levodopa per capsule</span></div>`
-    : `<div class="field"><label class="editor-label" for="strength-${id}">${drug.unit[0] === "tablet" ? "Tablet" : "Capsule"} strength<span class="sr-only"> (carbidopa/levodopa mg)</span></label><select id="strength-${id}" data-field="strength">${strengthOptions(drug, dose)}</select></div>`;
+  };
+  // One radio group; the amantadine products sit under their own small label.
+  const chips = `${DRUG_ORDER.map(chip).join("")}<span class="chip-group" aria-hidden="true">Amantadine (own chart)</span>${AMANTADINE_ORDER.map(chip).join("")}`;
+  const strengthTitle = `${capitalize(drug.unit[0])} strength`;
+  const strengthField = fixedStrength
+    ? `<div class="field"><span class="editor-label">${escapeHtml(strengthTitle)}</span><span class="static-strength">${escapeHtml(`${drug.strengths[0].label} ${drug.mgName} per ${drug.unit[0]}`)}</span></div>`
+    : `<div class="field"><label class="editor-label" for="strength-${id}">${escapeHtml(strengthTitle)}<span class="sr-only"> (${levodopa ? "carbidopa/levodopa" : escapeHtml(drug.mgName)} mg)</span></label><select id="strength-${id}" data-field="strength">${strengthOptions(drug, dose)}</select></div>`;
+  const mgHint = levodopa ? "The second number on the label, e.g. 100 in 25/100." : drug.mgHint;
   const amountField = mgMode
-    ? `<div class="field"><label class="editor-label" for="mg-${id}">Levodopa (mg)</label><input class="text-field mg-field" id="mg-${id}" data-field="mg" type="text" inputmode="decimal" autocomplete="off" value="${dose.dose ?? ""}" aria-describedby="mgHint-${id} amountError-${id} amountNote-${id}"><p class="hint" id="mgHint-${id}">The second number on the label, e.g. 100 in 25/100.</p></div>`
+    ? `<div class="field"><label class="editor-label" for="mg-${id}">${escapeHtml(capitalize(drug.mgName))} (mg)</label><input class="text-field mg-field" id="mg-${id}" data-field="mg" type="text" inputmode="decimal" autocomplete="off" value="${dose.dose ?? ""}" aria-describedby="mgHint-${id} amountError-${id} amountNote-${id}"><p class="hint" id="mgHint-${id}">${escapeHtml(mgHint)}</p></div>`
     : `<div class="field"><label class="editor-label" for="count-${id}">${labels.label}</label><div class="count-controls"><button type="button" class="nudge" data-act="count-down" tabindex="-1" aria-label="${labels.minus}">−</button><input class="text-field count-field" id="count-${id}" data-field="count" type="text" inputmode="decimal" autocomplete="off" value="${escapeHtml(formatCount(dose.count))}" aria-describedby="amountError-${id} amountNote-${id}"><button type="button" class="nudge" data-act="count-up" tabindex="-1" aria-label="${labels.plus}">+</button></div></div>`;
   return `<fieldset class="editor" id="editor-${id}" data-editor="${id}">
     <legend class="sr-only">${escapeHtml(legend)}</legend>
@@ -295,12 +327,12 @@ function editorHtml(dose) {
       <legend>Medicine</legend>
       <div class="chips">${chips}</div>
       <p class="generic">${escapeHtml(drug.generic)}</p>
-      ${isInbrija ? `<p class="field-note">Inbrija is only for OFF episodes, taken as needed on top of carbidopa/levodopa. Each dose is 2 capsules (84 mg), up to 5 times a day.</p>` : ""}
+      ${drug.editorNote ? `<p class="field-note">${escapeHtml(drug.editorNote)}</p>` : ""}
     </fieldset>
     <div class="editor-block">
       <div class="amount-grid">${strengthField}${amountField}</div>
       <p class="field-error" id="amountError-${id}"></p>
-      <p class="calc-line"><output id="calc-${id}" aria-live="polite">${escapeHtml(calcText(dose))}</output> ${infoButton("leddContribution")}</p>
+      <p class="calc-line"><output id="calc-${id}" aria-live="polite">${escapeHtml(calcText(dose))}</output> ${infoButton(levodopa ? "leddContribution" : "leddAmantadine", "tip-leddContribution")}</p>
       <div class="tip" id="tip-leddContribution" role="status"></div>
       <p class="field-note" id="amountNote-${id}">${escapeHtml(notes.amount ?? "")}</p>
     </div>
@@ -364,10 +396,9 @@ function renderDoseMeta() {
   els.addDoseBar.setAttribute("aria-label", full ? `${MAX_DOSES} doses is the limit` : "Add dose");
   els.addDoseBar.querySelector(".add-long").textContent = full ? `${MAX_DOSES} max` : "+ Add dose";
   els.addDoseBar.querySelector(".add-short").textContent = full ? `${MAX_DOSES} max` : "+ Add";
-  const totals = dailyTotals(state.doses);
   const counted = state.doses.some(hasAmount);
   els.dailyTotal.hidden = !counted;
-  els.dailyTotalText.textContent = `${formatNumber(totals.mg)} mg levodopa = ${formatNumber(totals.led)} mg LEDD/day`;
+  els.dailyTotalText.textContent = dailyTotalText(state.doses);
   els.toolsRow.hidden = empty;
   els.makeSheet.hidden = !counted;
   // The bar holds the phone's only Add button, so it shows whenever any dose
@@ -390,7 +421,7 @@ function openEditor(id, { isNew = false, snapshot = listSnapshot() } = {}) {
   ui.isNew = isNew;
   ui.editSnapshot = snapshot;
   ui.pendingTimeText = null;
-  ui.intendedMg = dose.dose;
+  ui.intended = { [drugOf(dose).doseBasis]: dose.dose };
   ui.notes = {};
   frozenOrder = listOrder().map(item => item.id);
   renderDoseList();
@@ -499,7 +530,7 @@ function commitAmount(dose) {
     // An amount opened from a file may sit outside the typing range; leave it
     // alone unless it was edited.
     if (input.value.trim() === (dose.dose === null ? "" : String(dose.dose))) return true;
-    const parsed = parseMg(input.value);
+    const parsed = parseMg(input.value, drug);
     setInvalid(input, Boolean(parsed.error));
     setFieldMessage(`amountError-${dose.id}`, parsed.error);
     if (parsed.error) return false;
@@ -530,7 +561,7 @@ function setDoseAmount(dose, mg) {
   const changed = dose.dose !== mg;
   if (changed) markEdited();
   dose.dose = mg;
-  ui.intendedMg = mg;
+  ui.intended[drugOf(dose).doseBasis] = mg;
   setFieldMessage(`calc-${dose.id}`, calcText(dose));
   if (changed) scheduleChanged();
   updateRow(dose);
@@ -548,19 +579,22 @@ function stepCount(dose, direction) {
 
 function changeMedicine(dose, toDrugId) {
   if (toDrugId === dose.drug) return;
+  const from = drugOf(dose);
+  const to = DRUG_BY_ID[toDrugId];
+  // ui.intended is left as it is: the amount a medicine shows as a stand-in
+  // must not replace the amount the user meant.
   const result = medicineChange({
-    fromDrug: drugOf(dose),
-    toDrug: DRUG_BY_ID[toDrugId],
+    fromDrug: from,
+    toDrug: to,
     mode: dose.strength === null ? "mg" : "strength",
-    intendedMg: ui.intendedMg
+    intendedMg: ui.intended[from.doseBasis] ?? null,
+    earlierMg: ui.intended[to.doseBasis] ?? null
   });
-  const intended = ui.intendedMg;
   markEdited();
   dose.drug = toDrugId;
   dose.strength = result.strength;
   dose.count = result.count;
   dose.dose = result.dose;
-  ui.intendedMg = intended;
   ui.notes.amount = result.note ?? null;
   scheduleChanged();
   renderDoseList();
@@ -581,7 +615,7 @@ function changeStrength(dose, value) {
     const minimum = minCount(drug, value);
     let count;
     if (dose.strength === null) {
-      count = dose.dose ? Math.round(dose.dose / strength.levodopa / step) * step : drug.defaultCount;
+      count = dose.dose ? Math.round(dose.dose / strengthMg(strength) / step) * step : drug.defaultCount;
     } else {
       count = Math.round((dose.count ?? drug.defaultCount) / step) * step;
     }
@@ -589,7 +623,7 @@ function changeStrength(dose, value) {
     dose.strength = value;
     dose.count = count;
     dose.dose = doseMg(drug, value, count);
-    ui.intendedMg = dose.dose;
+    ui.intended[drug.doseBasis] = dose.dose;
   }
   ui.notes.amount = hasAmount(dose) ? largeDoseNote(drug, dose.dose) : null;
   scheduleChanged();
@@ -668,12 +702,8 @@ function addDose(sourceId = null) {
   if (ui.openId && !commitEditor({ focusAfter: false })) return;
   if (state.doses.length >= MAX_DOSES) return;
   clearUndo();
-  const latest = sortedDoses().at(-1);
-  const source = sourceId ?? latest?.id ?? null;
-  const defaults = source
-    ? nextDoseDefaults(state.doses, source)
-    : { time: "08:00", drug: "sinemet", strength: "25/100", count: 1, dose: 100 };
-  const dose = { id: newId(), ...defaults };
+  // With no source this follows the latest levodopa dose, or starts at 08:00.
+  const dose = { id: newId(), ...nextDoseDefaults(state.doses, sourceId) };
   const snapshot = listSnapshot();
   state.doses.push(dose);
   state.example = false;
@@ -867,8 +897,17 @@ function renderResults() {
     return;
   }
   analysis = analyzeDay(state.doses, state.lines);
+  // Levodopa and amantadine each get their own blocks; a day can have either
+  // or both. They are shown before drawing so each chart has a width.
+  const levodopa = hasLevodopa();
+  els.levodopaTop.hidden = !levodopa;
+  els.levodopaBottom.hidden = !levodopa;
+  els.levodopaNone.hidden = levodopa;
+  els.amantadineBlock.hidden = !analysis.amantadine;
   if (!ui.cursorTouched) {
-    ui.cursorMinute = snap5(analysis.stats.lowestBefore?.minute ?? analysis.stats.maxMinute);
+    ui.cursorMinute = snap5(levodopa
+      ? analysis.stats.lowestBefore?.minute ?? analysis.stats.maxMinute
+      : analysis.amantadine.stats.maxMinute);
   }
   const compare = ui.pinned ? compareModel(analysis, ui.pinned) : null;
 
@@ -879,18 +918,30 @@ function renderResults() {
   els.compareSentence.hidden = !compare;
   els.compareSentence.textContent = compare?.sentence ?? "";
 
-  renderTiles(compare);
-  renderChart();
+  if (levodopa) {
+    renderTiles(compare);
+    renderChart();
+    renderBeforeTable(compare);
+    renderRangeLists();
+    renderAmantadineTable();
+    els.chartDesc.textContent = chartDesc(analysis);
+  }
+  renderAmantadine();
   renderKey();
-  renderBeforeTable(compare);
-  renderRangeLists();
   renderHourTable();
-  els.chartDesc.textContent = chartDesc(analysis);
   renderAnswerBar(compare);
   renderCursor();
+  alignSlider();
 }
 
 const snap5 = minute => Math.min(1435, Math.max(0, Math.round(minute / 5) * 5));
+const hasLevodopa = () => Boolean(analysis?.doses.length);
+
+function moveCursor(minute) {
+  ui.cursorTouched = true;
+  ui.cursorMinute = snap5(minute);
+  renderCursor();
+}
 
 const TILE_TIPS = { lowest: "lowest", highest: "highest", fluctuation: "fluctuation", below: "target", above: "high", target: "target", high: "high" };
 
@@ -907,28 +958,39 @@ function renderTiles() {
 }
 
 function renderChart() {
-  if (!chart) {
-    chart = createChart(els.chart, {
-      onCursor: minute => {
-        ui.cursorTouched = true;
-        ui.cursorMinute = snap5(minute);
-        renderCursor();
-      },
-      onDraw: alignSlider
-    });
-  }
+  if (!chart) chart = createChart(els.chart, { onCursor: moveCursor, onDraw: alignSlider });
   chart.draw(analysis, {
     cursorMinute: ui.cursorMinute,
     pinnedTotal: ui.pinned?.total ?? null,
     highlightId: currentHighlight(),
     printing: false
   });
-  alignSlider();
 }
 
+// The amantadine chart sits under the levodopa chart with the same margins,
+// so the same clock time is at the same place across both. One cursor moves
+// on both.
+function renderAmantadine(printing = false) {
+  const panel = amantadinePanel(analysis);
+  if (!panel) return;
+  els.amantadineSummary.innerHTML = amantadineSentences(analysis).map(sentence => `<p>${escapeHtml(sentence)}</p>`).join("");
+  els.amantadineDesc.textContent = amantadineDesc(analysis);
+  if (!amantadineChart) {
+    amantadineChart = createChart(els.amantadineChart, { variant: "amantadine", onCursor: moveCursor, onDraw: alignSlider });
+  }
+  amantadineChart.draw(panel, {
+    cursorMinute: ui.cursorMinute,
+    pinnedTotal: ui.pinned?.amantadine?.total ?? null,
+    highlightId: printing ? null : currentHighlight(),
+    printing
+  });
+}
+
+// The slider lines up with the plot of whichever chart is showing.
 function alignSlider() {
-  if (!chart?.plotBox) return;
-  const box = chart.plotBox();
+  const shown = hasLevodopa() ? chart : amantadineChart;
+  if (!shown?.plotBox) return;
+  const box = shown.plotBox();
   if (!box || !box.width) return;
   els.slider.style.marginLeft = `${Math.max(0, box.left - 10)}px`;
   els.slider.style.width = `${box.width + 20}px`;
@@ -937,22 +999,33 @@ function alignSlider() {
 function renderCursor() {
   if (!analysis) return;
   const minute = ui.cursorMinute;
-  els.readout.textContent = readoutText(analysis, minute);
+  const levodopa = hasLevodopa();
+  if (levodopa) els.readout.textContent = readoutText(analysis, minute);
+  els.amantadineReadout.textContent = amantadineReadout(analysis, minute);
   els.slider.value = String(minute);
-  els.slider.setAttribute("aria-valuetext", sliderValueText(analysis, minute));
-  chart?.setCursor(minute);
+  const valueText = [levodopa ? sliderValueText(analysis, minute) : formatClock(minute)];
+  if (analysis.amantadine) valueText.push(amantadineValueText(analysis, minute));
+  els.slider.setAttribute("aria-valuetext", valueText.join(", "));
+  if (levodopa) chart?.setCursor(minute);
+  if (analysis.amantadine) amantadineChart?.setCursor(minute);
 }
 
 function renderKey() {
-  const items = [`<li>${lineSwatch({ color: "#17202a", dash: "" }, 3.5)}Total</li>`];
-  const inUse = DRUG_ORDER.filter(drugId => analysis.doses.some(dose => dose.drug === drugId));
+  const levodopa = hasLevodopa();
+  const amantadine = analysis.amantadine;
+  const items = [`<li>${lineSwatch({ color: "#17202a", dash: "" }, 3.5)}Total${amantadine && levodopa ? " (each chart)" : ""}</li>`];
+  const counted = [...analysis.doses, ...(amantadine?.doses ?? [])];
+  const inUse = MEDICINE_ORDER.filter(drugId => counted.some(dose => dose.drug === drugId));
   for (const drugId of inUse) items.push(`<li>${lineSwatch(DRUG_BY_ID[drugId].style)}${escapeHtml(DRUG_BY_ID[drugId].shortName)}</li>`);
-  items.push(`<li>${lineSwatch({ color: "#6b7580", dash: "1 4" }, 2)}100 = one IR peak</li>`);
+  if (levodopa) items.push(`<li>${lineSwatch({ color: "#6b7580", dash: "1 4" }, 2)}100 = one IR peak</li>`);
   if (state.lines.target !== null) items.push(`<li>${lineSwatch({ color: "#146c43", dash: "7 4" }, 2)}Target line ${formatNumber(state.lines.target)}</li>`);
   if (state.lines.high !== null) items.push(`<li>${lineSwatch({ color: "#9c2f24", dash: "10 3 2 3" }, 2)}High line ${formatNumber(state.lines.high)}</li>`);
   if (ui.pinned) items.push(`<li>${lineSwatch({ color: "#8a96a3", dash: "6 4" }, 2)}Pinned day</li>`);
   items.push(`<li><span class="key-glyph" aria-hidden="true">▲</span>dose</li>`);
-  items.push(`<li><span class="key-glyph" aria-hidden="true">①</span>level before a dose</li>`);
+  if (levodopa) {
+    items.push(`<li><span class="key-glyph" aria-hidden="true">①</span>level before a dose${amantadine ? " (levodopa chart)" : ""}</li>`);
+    if (amantadine) items.push(`<li><span class="key-glyph" aria-hidden="true">①</span>levodopa dose time (amantadine chart)</li>`);
+  }
   if (state.lines.target !== null) items.push(`<li><svg class="line-swatch" viewBox="0 0 28 10" aria-hidden="true"><rect width="28" height="10" fill="#fbe3c8"/></svg>Shaded: below target line</li>`);
   if (state.lines.high !== null) items.push(`<li><svg class="line-swatch" viewBox="0 0 28 10" aria-hidden="true"><rect width="28" height="10" fill="#f3d6d2"/></svg>Shaded: above high line</li>`);
   els.chartKey.innerHTML = items.join("");
@@ -978,6 +1051,16 @@ function renderBeforeTable(compare) {
   els.beforeNotes.innerHTML = notes.map(note => `<p>${escapeHtml(note)}</p>`).join("");
 }
 
+// The amantadine level at each levodopa dose time. The row numbers match the
+// table above and the markers on the amantadine chart.
+function renderAmantadineTable() {
+  const rows = analysis.amantadine?.atDoses ?? [];
+  els.amantadineTableWrap.hidden = rows.length === 0;
+  els.amantadineBody.innerHTML = rows.map(row => (
+    `<tr><td>${circled(row.number)} ${escapeHtml(row.label)}</td><td>${escapeHtml(`${ngText(row.level)} ng/mL`)}</td><td>${Math.round(row.share * 100)}%</td></tr>`
+  )).join("");
+}
+
 function renderRangeLists() {
   const parts = [];
   if (state.lines.target !== null && analysis.below) {
@@ -995,10 +1078,12 @@ function renderRangeLists() {
 
 function renderHourTable() {
   const rows = hourlyRows(analysis);
-  const lines = state.lines.target !== null || state.lines.high !== null;
-  els.hourHead.innerHTML = `<tr><th scope="col">Time</th><th scope="col">Level</th><th scope="col">Doses this hour</th>${lines ? `<th scope="col">Compared with your lines</th>` : ""}</tr>`;
+  const levodopa = hasLevodopa();
+  const amantadine = Boolean(analysis.amantadine);
+  const lines = levodopa && (state.lines.target !== null || state.lines.high !== null);
+  els.hourHead.innerHTML = `<tr><th scope="col">Time</th>${levodopa ? `<th scope="col">${amantadine ? "Levodopa level" : "Level"}</th>` : ""}${amantadine ? `<th scope="col">Amantadine (ng/mL)</th>` : ""}<th scope="col">Doses this hour</th>${lines ? `<th scope="col">Compared with your lines</th>` : ""}</tr>`;
   els.hourBody.innerHTML = rows.map(row => (
-    `<tr><td>${escapeHtml(row.time)}</td><td>${escapeHtml(String(row.level))}</td><td>${escapeHtml(row.doses ?? "")}</td>${lines ? `<td>${escapeHtml(row.compared ?? "")}</td>` : ""}</tr>`
+    `<tr><td>${escapeHtml(row.time)}</td>${levodopa ? `<td>${escapeHtml(String(row.level))}</td>` : ""}${amantadine ? `<td>${escapeHtml(row.amantadine ?? "")}</td>` : ""}<td>${escapeHtml(row.doses ?? "")}</td>${lines ? `<td>${escapeHtml(row.compared ?? "")}</td>` : ""}</tr>`
   )).join("");
 }
 
@@ -1014,6 +1099,7 @@ function currentHighlight() {
 
 function highlightCurrent() {
   chart?.highlight(currentHighlight());
+  amantadineChart?.highlight(currentHighlight());
 }
 
 /* ---------- Status region ---------- */
@@ -1289,19 +1375,13 @@ els.removeLines.addEventListener("click", () => {
   scheduleChanged();
 });
 
-els.slider.addEventListener("input", () => {
-  ui.cursorTouched = true;
-  ui.cursorMinute = snap5(Number(els.slider.value));
-  renderCursor();
-});
+els.slider.addEventListener("input", () => moveCursor(Number(els.slider.value)));
 
 els.slider.addEventListener("keydown", event => {
   const steps = { PageUp: 60, PageDown: -60 };
   if (!Object.hasOwn(steps, event.key)) return;
   event.preventDefault();
-  ui.cursorTouched = true;
-  ui.cursorMinute = snap5(ui.cursorMinute + steps[event.key]);
-  renderCursor();
+  moveCursor(ui.cursorMinute + steps[event.key]);
 });
 
 els.howItWorksLink.addEventListener("click", event => {
@@ -1441,10 +1521,11 @@ window.addEventListener("message", event => {
 /* ---------- Static content ---------- */
 
 function renderDrugCards() {
-  els.drugCards.innerHTML = DRUG_ORDER.map(drugId => {
+  els.drugCards.innerHTML = MEDICINE_ORDER.map(drugId => {
     const drug = DRUG_BY_ID[drugId];
     const strengths = drug.strengths.map(strength => strength.label).join(", ");
-    const factor = drug.led.value;
+    // Gocovri's factor applies to the hydrochloride mg, not the labeled mg.
+    const factor = drug.led.basisName ? `${drug.led.value} of the ${drug.led.basisName} mg` : drug.led.value;
     const status = drug.ledAssumed ? "assumed; borrowed from Rytary" : "consensus, Jost 2023";
     const sources = drug.sources.map(source => (
       `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)}</a>`
@@ -1469,7 +1550,8 @@ function fillPrint() {
   const today = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
   els.printHeader.replaceChildren();
   const title = document.createElement("h2");
-  title.textContent = "Levodopa day summary";
+  const amantadine = state.doses.some(dose => hasAmount(dose) && !isLevodopa(drugOf(dose)));
+  title.textContent = amantadine ? "Levodopa and amantadine day summary" : "Levodopa day summary";
   const meta = document.createElement("p");
   meta.textContent = `Printed ${today} · Model ${MODEL_VERSION}`;
   const caution = document.createElement("p");
@@ -1479,7 +1561,7 @@ function fillPrint() {
   els.printDoses.replaceChildren();
   const table = document.createElement("table");
   const head = table.createTHead().insertRow();
-  for (const label of ["Time", "Medicine", "Amount", "Levodopa mg", "LEDD (factor)"]) {
+  for (const label of ["Time", "Medicine", "Amount", amantadine ? "Drug mg" : "Levodopa mg", "LEDD (factor)"]) {
     const cell = document.createElement("th");
     cell.scope = "col";
     cell.textContent = label;
@@ -1489,27 +1571,30 @@ function fillPrint() {
   for (const dose of sortedDoses()) {
     const drug = drugOf(dose);
     const row = body.insertRow();
-    const led = hasAmount(dose) ? `${formatNumber(dose.dose * drug.led.value)} (×${drug.led.value}${drug.ledAssumed ? ", assumed" : ""})` : "not counted";
+    const factor = `×${drug.led.value}${drug.led.basisName ? ` of ${drug.led.basisName} mg` : ""}${drug.ledAssumed ? ", assumed" : ""}`;
+    const led = hasAmount(dose) ? `${formatNumber(dose.dose * ledPerMg(drug))} (${factor})` : "not counted";
+    const mg = hasAmount(dose) ? `${formatNumber(dose.dose)}${amantadine ? ` ${drug.mgName}` : ""}` : "—";
     // "1½ × 25/100 tablet": the unit names the strength, so it stays singular.
     const amount = dose.strength ? `${formatCount(dose.count)} × ${strengthOf(drug, dose.strength).label} ${drug.unit[0]}` : (hasAmount(dose) ? `${formatNumber(dose.dose)} mg` : "—");
-    for (const text of [dose.time, drug.shortName, amount, hasAmount(dose) ? formatNumber(dose.dose) : "—", led]) {
+    for (const text of [dose.time, drug.shortName, amount, mg, led]) {
       row.insertCell().textContent = text;
     }
   }
-  const totals = dailyTotals(state.doses);
   const parts = [];
   if (state.lines.target !== null) parts.push(`Target line ${formatNumber(state.lines.target)}`);
   if (state.lines.high !== null) parts.push(`High line ${formatNumber(state.lines.high)}`);
   const total = document.createElement("p");
-  total.textContent = `Daily total: ${formatNumber(totals.mg)} mg levodopa = ${formatNumber(totals.led)} mg LEDD/day · ${parts.length ? parts.join(" · ") : "No lines set"}`;
+  total.textContent = `Daily total: ${dailyTotalText(state.doses)} · ${parts.length ? parts.join(" · ") : "No lines set"}`;
   els.printDoses.append(table, total);
-  if (analysis && chart) {
+  if (analysis && chart && hasLevodopa()) {
     chart.draw(analysis, { cursorMinute: ui.cursorMinute, pinnedTotal: ui.pinned?.total ?? null, highlightId: null, printing: true });
   }
+  if (analysis) renderAmantadine(true);
 }
 
 function afterPrint() {
-  if (analysis && chart) renderChart();
+  if (analysis && chart && hasLevodopa()) renderChart();
+  if (analysis) renderAmantadine();
 }
 
 window.addEventListener("beforeprint", fillPrint);

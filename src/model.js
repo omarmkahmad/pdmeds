@@ -4,7 +4,9 @@ import {
   LN2,
   MINUTES_PER_DAY,
   MODEL_VERSION,
-  REGIMEN_SCHEMA_VERSION
+  REGIMEN_SCHEMA_VERSION,
+  analyteOf,
+  ledPerMg
 } from "./drugs.js";
 import { countStep, doseMg, inferStrength, strengthOf, validateCount } from "./amounts.js";
 
@@ -203,7 +205,7 @@ export function calculateLedSummary(doses) {
     if (!drug || !Number.isFinite(dose.dose) || dose.dose <= 0) {
       return { index, totalLed: 0 };
     }
-    return { index, totalLed: dose.dose * drug.led.value };
+    return { index, totalLed: dose.dose * ledPerMg(drug) };
   });
 
   return {
@@ -212,21 +214,40 @@ export function calculateLedSummary(doses) {
   };
 }
 
-// Area under one component drawn with a peak of 1: the linear rise gives
-// peakTime / 2 and the exponential fall gives halfLife / ln 2.
+// A component may start late: nothing arrives before its `lag` (minutes).
+function lagOf(component) {
+  return component.lag > 0 ? component.lag : 0;
+}
+
+// Area under one component drawn with a peak of 1: the linear rise (from the
+// lag to the peak) gives (peakTime - lag) / 2 and the exponential fall gives
+// halfLife / ln 2.
 export function componentUnitArea(component) {
-  return component.peakTime / 2 + component.halfLife / LN2;
+  return (component.peakTime - lagOf(component)) / 2 + component.halfLife / LN2;
+}
+
+// One component's level, as a share of its peak, `elapsed` minutes after the
+// dose: 0 until the lag, a straight rise to the peak, then an exponential fall.
+export function componentShape(component, elapsed) {
+  const lag = lagOf(component);
+  if (elapsed < 0 || elapsed < lag) return 0;
+  if (component.peakTime > lag && elapsed <= component.peakTime) {
+    return (elapsed - lag) / (component.peakTime - lag);
+  }
+  return Math.pow(0.5, (elapsed - Math.max(component.peakTime, 0)) / component.halfLife);
 }
 
 // Each component's `fraction` is its share of the curve's area (for an
-// extended-release product, the share of absorbed levodopa that arrives
-// through that part). The whole curve's area is exposureMg times the area of
-// a 1 mg immediate-release curve, so one 100 mg IR dose peaks at 100.
+// extended-release product, the share of absorbed drug that arrives through
+// that part). The whole curve's area is exposureMg times the area of a 1 mg
+// curve: for levodopa that is the immediate-release curve, so one 100 mg IR
+// dose peaks at 100; amantadine names its own area (`unitAuc`), in ng/mL.
 export function normalizedComponentPeaks(drug, exposureMg) {
   if (drug.exposure.kind !== "components") return [];
   if (!(exposureMg > 0)) return drug.exposure.values.map(() => 0);
+  const unitAuc = drug.exposure.unitAuc ?? LD_AUC;
   return drug.exposure.values.map(component => (
-    exposureMg * LD_AUC * component.fraction / componentUnitArea(component)
+    exposureMg * unitAuc * component.fraction / componentUnitArea(component)
   ));
 }
 
@@ -246,7 +267,8 @@ export function modeledInfiniteAuc(drug, exposureMg) {
 // result is the exact steady state of a schedule repeated daily.
 export function contributionAtMinute(dose, drug, minute) {
   if (!drug || !(dose.dose > 0) || !Number.isFinite(minute)) return 0;
-  // Levodopa that reaches the blood, in mg of immediate-release equivalent.
+  // Drug that reaches the blood: for levodopa, mg of immediate-release
+  // equivalent; for amantadine, mg of amantadine hydrochloride.
   const exposureMg = dose.dose * drug.exposure.exposureFactor;
   if (!(exposureMg > 0) || !Number.isFinite(exposureMg)) return 0;
 
@@ -259,14 +281,7 @@ export function contributionAtMinute(dose, drug, minute) {
     const elapsed = minute - doseMinute + MINUTES_PER_DAY * day;
     if (elapsed < 0) continue;
     drug.exposure.values.forEach((component, index) => {
-      if (component.peakTime > 0 && elapsed <= component.peakTime) {
-        level += peaks[index] * elapsed / component.peakTime;
-      } else {
-        level += peaks[index] * Math.pow(
-          0.5,
-          (elapsed - Math.max(component.peakTime, 0)) / component.halfLife
-        );
-      }
+      level += peaks[index] * componentShape(component, elapsed);
     });
   }
   const elapsedTwoDaysBack = minute - doseMinute + 2 * MINUTES_PER_DAY;
@@ -281,11 +296,17 @@ export function contributionAtMinute(dose, drug, minute) {
 }
 
 // Every dose counts. A dose without an amount (dose not > 0) keeps an
-// all-zero series and adds nothing to the total.
+// all-zero series and adds nothing to the total. The total is one drug's
+// level, so every dose must share an analyte: levodopa and amantadine are
+// computed in separate calls and never added together.
 export function computeDay(state) {
   if (!state || !Array.isArray(state.doses) || state.doses.length > MAX_DOSES) {
     throw new ModelValidationError([DOSE_LIMIT]);
   }
+  const analytes = new Set(state.doses
+    .filter(dose => isPositive(dose?.dose) && DRUG_BY_ID[dose.drug])
+    .map(dose => analyteOf(DRUG_BY_ID[dose.drug])));
+  if (analytes.size > 1) throw new TypeError("computeDay adds up one analyte at a time.");
   const led = calculateLedSummary(state.doses);
   const series = state.doses.map(() => new Float64Array(MINUTES_PER_DAY + 1));
   const total = new Float64Array(MINUTES_PER_DAY + 1);
