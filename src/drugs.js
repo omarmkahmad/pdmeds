@@ -1,4 +1,4 @@
-export const MODEL_VERSION = "4.1.0";
+export const MODEL_VERSION = "4.2.0";
 export const REGIMEN_SCHEMA_VERSION = 2;
 export const MINUTES_PER_DAY = 1440;
 export const LN2 = Math.log(2);
@@ -155,10 +155,10 @@ export const AMANTADINE_DRUGS = [
       { id: "100", label: "100 mg", amantadine: 100, halves: false }
     ],
     defaultStrength: "100", defaultCount: 1, maxCount: 4,
-    peaksText: "Peaks about 3 h after a dose", halfText: "stays above half its peak for about 17½ h",
+    peaksText: "Peaks about 2½ h after a dose", halfText: "stays above half its peak for about 17 h",
     isLevodopa: false, led: factor(1),
-    exposure: { ...components(1, [{ fraction: 1, peakTime: 180, halfLife: 960 }]), unitAuc: AMANTADINE_AUC },
-    model: "Rise to a peak at 3 h, then half-life 16 h (label: peak at 2–4 h, half-life 16–17 h). Levels are typical ng/mL for a PD patient: the steady-state curve area in healthy adults (57.7 ng·h/mL per mg, FDA review) times 1.6 for the lower kidney clearance of PD patients (Hauser 2019). Check: 100 mg at 08:00 and 16:00 peaks at about 990 ng/mL and averages about 740 from 06:00 to 18:00 (published simulation: 967 and 751).",
+    exposure: { ...components(1, [{ fraction: 1, peakTime: 150, halfLife: 960 }]), unitAuc: AMANTADINE_AUC },
+    model: "Rise to a peak at 2½ h, then half-life 16 h (label: peak at 2–4 h, half-life 16–17 h). Levels are typical ng/mL for a PD patient: the steady-state curve area in healthy adults (57.7 ng·h/mL per mg, FDA review) times 1.6 for the lower kidney clearance of PD patients (Hauser 2019). Checked against the measured steady-state profile in healthy adults (Hauser 2019, Fig. 3b): within 9% at every sampled hour. In PD patients, 100 mg at 08:00 and 16:00 peaks at about 1,000 ng/mL and averages about 740 from 06:00 to 18:00 (published simulation: 967 and 751).",
     sources: [SOURCES.amantadineLabel, SOURCES.hauser2019, SOURCES.fdaGocovri, SOURCES.jost2023]
   },
   {
@@ -173,16 +173,17 @@ export const AMANTADINE_DRUGS = [
       { id: "137", label: "137 mg", amantadine: 137, halves: false }
     ],
     defaultStrength: "137", defaultCount: 2, maxCount: 4,
-    peaksText: "Starts to rise about 3 h after a dose and peaks about 13 h after it", halfText: "stays above half its peak for about 23 h",
+    peaksText: "Starts to rise about 2½ h after a dose and peaks about 10 h after it", halfText: "stays above half its peak for about 28 h",
     isLevodopa: false, led: { ...factor(1.25), basis: GOCOVRI_HCL_PER_MG, basisName: "HCl" },
     exposure: {
       ...components(GOCOVRI_HCL_PER_MG, [
-        { fraction: 0.55, lag: 180, peakTime: 480, halfLife: 960 },
-        { fraction: 0.45, lag: 180, peakTime: 780, halfLife: 960 }
+        { fraction: 0.40, lag: 150, peakTime: 330, halfLife: 960 },
+        { fraction: 0.25, lag: 150, peakTime: 600, halfLife: 960 },
+        { fraction: 0.35, lag: 150, peakTime: 1020, halfLife: 960 }
       ]),
       unitAuc: AMANTADINE_AUC
     },
-    model: "No rise for the first 3 h, then two overlapping parts that peak 8 h (55%) and 13 h (45%) after the dose, each with half-life 16 h (label). Fitted to the steady-state shape: lowest in the first 3 h after a dose, highest about 8 h after it (Hauser 2019). Same curve area per mg of amantadine hydrochloride as immediate release (FDA review: 58.5 vs 57.7 ng·h/mL per mg at steady state). Check: 274 mg at 22:00 peaks at about 1,640 ng/mL and averages about 1,490 from 06:00 to 18:00 (published simulation: 1,690 and 1,536; measured in PD patients: about 1,500).",
+    model: "No rise for the first 2½ h, then three overlapping parts that peak 5½ h (40%), 10 h (25%) and 17 h (35%) after the dose, each with half-life 16 h (label). Fitted to the measured steady-state profile in healthy adults (Hauser 2019, Fig. 1c), within 6% at every sampled hour: lowest about 2½ h after a dose, then a plateau from about 6 to 14 h after it. Same curve area per mg of amantadine hydrochloride as immediate release (FDA review: 58.5 vs 57.7 ng·h/mL per mg at steady state). In PD patients, 274 mg at 22:00 averages about 1,470 ng/mL from 9 to 17 h after the dose (measured: about 1,400–1,500) and peaks at about 1,560. The paper's own simulation for PD patients runs about 9% higher (peak 1,690).",
     sources: [SOURCES.hauser2019, SOURCES.gocovriLabel, SOURCES.fdaGocovri, SOURCES.jost2023]
   }
 ];

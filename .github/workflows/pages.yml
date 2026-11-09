@@ -38,14 +38,29 @@ jobs:
           cp schedule.html schedule.css schedule.js _site/
           cp apple-touch-icon.png _site/
           cp src/*.js _site/src/
-      - name: Stamp deploy date and cache-bust schedule assets
+      - name: Stamp deploy date and version every script and stylesheet
         run: |
           STAMP="$(TZ=America/Chicago date +%-m/%-d/%y)"
           SHORT_SHA="${GITHUB_SHA::8}"
           sed -i "s|<span id=\"lastUpdated\">[^<]*</span>|<span id=\"lastUpdated\">${STAMP}</span>|" _site/schedule.html
-          sed -i "s|href=\"schedule.css\"|href=\"schedule.css?v=${SHORT_SHA}\"|" _site/schedule.html
-          sed -i "s|src=\"schedule.js\"|src=\"schedule.js?v=${SHORT_SHA}\"|" _site/schedule.html
           grep -o 'Last updated: <span id="lastUpdated">[^<]*</span>' _site/schedule.html
+          # Browsers keep Pages files for 10 minutes. Right after a deploy a
+          # page could still run its old scripts, or a new app.js with old
+          # modules. So every script and stylesheet moves into a folder named
+          # after this commit. The modules app.js imports resolve next to it,
+          # so the whole set gets new URLs together, and a reload shows the
+          # new version.
+          ASSETS="assets-${SHORT_SHA}"
+          mkdir "_site/${ASSETS}"
+          mv _site/app.js _site/styles.css _site/schedule.js _site/schedule.css _site/src "_site/${ASSETS}/"
+          sed -i "s|href=\"styles.css\"|href=\"${ASSETS}/styles.css\"|; s|src=\"app.js\"|src=\"${ASSETS}/app.js\"|" _site/index.html
+          sed -i "s|href=\"schedule.css\"|href=\"${ASSETS}/schedule.css\"|; s|src=\"schedule.js\"|src=\"${ASSETS}/schedule.js\"|" _site/schedule.html
+          # Stop the deploy if a page still loads a script or stylesheet from
+          # outside that folder (for example, a file added to a page later).
+          if grep -En "(src|href)=\"[^\"]*\.(js|css)\"" _site/index.html _site/schedule.html | grep -v "=\"${ASSETS}/"; then
+            echo "A page loads a script or stylesheet that is not in ${ASSETS}." >&2
+            exit 1
+          fi
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:

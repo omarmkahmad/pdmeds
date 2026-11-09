@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { posix } from "node:path";
+import { execFileSync } from "node:child_process";
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, posix } from "node:path";
 import {
   FILLED_MESSAGE,
   HANDOFF_WAIT_MS,
@@ -317,11 +319,14 @@ function moduleSpecifiers(source) {
   return MODULE_SPECIFIERS.flatMap(pattern => [...source.matchAll(pattern)].map(match => match[1]));
 }
 
-// The commands of the "Assemble static site" step in pages.yml.
-function assembleCommands() {
+const ASSEMBLE_STEP = "Assemble static site";
+const VERSION_STEP = "Stamp deploy date and version every script and stylesheet";
+
+// The commands of one step's "run: |" block in pages.yml.
+function stepCommands(name) {
   const lines = read(".github/workflows/pages.yml").split("\n");
-  const step = lines.findIndex(line => line.trim() === "- name: Assemble static site");
-  assert.ok(step >= 0, 'pages.yml has an "Assemble static site" step');
+  const step = lines.findIndex(line => line.trim() === `- name: ${name}`);
+  assert.ok(step >= 0, `pages.yml has a "${name}" step`);
   const run = lines.findIndex((line, index) => index > step && /^\s*run: \|\s*$/.test(line));
   const indent = line => line.match(/^ */)[0].length;
   const commands = [];
@@ -332,6 +337,8 @@ function assembleCommands() {
   }
   return commands;
 }
+
+const assembleCommands = () => stepCommands(ASSEMBLE_STEP);
 
 function expandGlob(pattern) {
   if (!pattern.includes("*")) return [pattern];
@@ -390,13 +397,12 @@ function pageNeeds(page) {
   return needed;
 }
 
-test("schedule.js imports nothing, so the Pages build's copy and ?v= stamp cover it", () => {
+test("schedule.js imports nothing, so the time sheet needs only its one script", () => {
   const js = read("schedule.js");
   assert.deepEqual(moduleSpecifiers(js), []);
   // The specifier scan does find imports.
   assert.deepEqual(moduleSpecifiers('import {\n  a,\n  b\n} from "./src/x.js";\nimport "./y.js";\nexport * from "./z.js";\nimport("./w.js");'),
     ["./src/x.js", "./y.js", "./z.js", "./w.js"]);
-  assert.match(read(".github/workflows/pages.yml"), /schedule\.js\?v=/);
   // Importing it here (no document) ran no page code.
   assert.equal(typeof globalThis.document, "undefined");
 });
@@ -412,6 +418,144 @@ test("every file index.html needs is in the site pages.yml assembles", () => {
   const site = pagesSiteFiles();
   const missing = [...pageNeeds("index.html")].filter(path => !site.has(path));
   assert.deepEqual(missing, [], `pages.yml does not copy: ${missing.join(", ")}`);
+});
+
+/* ---------- Cache-busting: a deploy never mixes old and new files ---------- */
+
+// GitHub Pages lets browsers keep a file for 10 minutes. With fixed URLs, a
+// reload just after a deploy showed the old Explorer, and a new app.js could
+// meet an old module it imports. The build therefore moves every script and
+// stylesheet into a folder named after the commit.
+
+// Script and stylesheet URLs a built page loads.
+function loadedAssets(html) {
+  return [...html.matchAll(/\s(?:src|href)="([^"]+\.(?:js|css))"/g)].map(match => match[1]);
+}
+
+test("the Pages build versions every script and stylesheet the pages load", () => {
+  const commands = stepCommands(VERSION_STEP);
+  const moved = commands.find(command => command.startsWith("mv "));
+  assert.ok(moved, "the step moves the assets into the commit's folder");
+  const sources = moved.split(/\s+/).slice(1, -1).map(path => path.replace(/^_site\//, ""));
+  assert.equal(moved.split(/\s+/).at(-1), '"_site/${ASSETS}/"');
+  assert.match(commands.join("\n"), /ASSETS="assets-\$\{SHORT_SHA\}"/);
+  // Everything a page loads as a script or stylesheet is moved, with src/ for the modules.
+  for (const page of ["index.html", "schedule.html"]) {
+    for (const asset of loadedAssets(read(page))) {
+      assert.ok(sources.includes(asset), `${asset} (loaded by ${page}) is moved`);
+      const attribute = asset.endsWith(".css") ? "href" : "src";
+      assert.ok(commands.some(command => command.startsWith("sed ") && command.includes(`${attribute}=\\"${asset}\\"`) && command.endsWith(`_site/${page}`)),
+        `${page}'s ${asset} is rewritten`);
+    }
+  }
+  assert.ok(sources.includes("src"));
+  // Every module app.js imports lives under src/ or beside it, so it moves with it.
+  const needs = [...pageNeeds("index.html")].filter(path => path.endsWith(".js"));
+  for (const path of needs) assert.ok(path === "app.js" || path.startsWith("src/"), path);
+  // The pages in the repo keep plain paths: they run as they are from a local
+  // server and from the Cloudflare build, which has no build step.
+  assert.deepEqual(loadedAssets(read("index.html")), ["styles.css", "app.js"]);
+  assert.deepEqual(loadedAssets(read("schedule.html")), ["schedule.css", "schedule.js"]);
+});
+
+// The next tests run the build steps for real, in a scratch copy of the
+// site's files. The steps use GNU sed (-i with no suffix), as the ubuntu
+// runner has, so these tests are skipped on other systems.
+const SITE_SOURCES = ["index.html", "styles.css", "app.js", "schedule.html", "schedule.css", "schedule.js", "apple-touch-icon.png", "src"];
+
+function scratchCopy() {
+  const root = mkdtempSync(join(tmpdir(), "pdmeds-site-"));
+  for (const name of SITE_SOURCES) cpSync(new URL(`../${name}`, import.meta.url), join(root, name), { recursive: true });
+  return root;
+}
+
+function runStep(root, name, sha = "") {
+  execFileSync("bash", ["-e", "-c", stepCommands(name).join("\n")], { cwd: root, env: { ...process.env, GITHUB_SHA: sha }, stdio: "pipe" });
+}
+
+function buildSite(sha) {
+  const root = scratchCopy();
+  runStep(root, ASSEMBLE_STEP);
+  runStep(root, VERSION_STEP, sha);
+  return root;
+}
+
+function siteFiles(root, dir = "") {
+  return readdirSync(join(root, dir), { withFileTypes: true }).flatMap(entry => (
+    entry.isDirectory() ? siteFiles(root, posix.join(dir, entry.name)) : [posix.join(dir, entry.name)]
+  ));
+}
+
+test("the built site: pages at the root, every script and stylesheet under the commit's folder", { skip: process.platform !== "linux" }, () => {
+  const root = buildSite("0123456789abcdef0123456789abcdef01234567");
+  try {
+    const site = join(root, "_site");
+    const files = siteFiles(site).sort();
+    const assets = "assets-01234567";
+    const modules = readdirSync(new URL("../src/", import.meta.url)).filter(name => name.endsWith(".js")).map(name => `${assets}/src/${name}`);
+    assert.deepEqual(files, [
+      "apple-touch-icon.png", "index.html", "schedule.html",
+      `${assets}/app.js`, `${assets}/schedule.css`, `${assets}/schedule.js`, `${assets}/styles.css`, ...modules
+    ].sort());
+    const index = readFileSync(join(site, "index.html"), "utf8");
+    const sheet = readFileSync(join(site, "schedule.html"), "utf8");
+    assert.deepEqual(loadedAssets(index), [`${assets}/styles.css`, `${assets}/app.js`]);
+    assert.deepEqual(loadedAssets(sheet), [`${assets}/schedule.css`, `${assets}/schedule.js`]);
+    // The files are the repo's own, unchanged, and every import resolves inside the folder.
+    for (const name of ["app.js", "styles.css", "schedule.js", "schedule.css", "src/drugs.js"]) {
+      assert.equal(readFileSync(join(site, assets, name), "utf8"), read(name), name);
+    }
+    for (const file of files.filter(name => name.endsWith(".js"))) {
+      for (const specifier of moduleSpecifiers(readFileSync(join(site, file), "utf8"))) {
+        const target = posix.normalize(posix.join(posix.dirname(file), specifier));
+        assert.ok(target.startsWith(`${assets}/`) && files.includes(target), `${file} imports ${specifier}`);
+      }
+    }
+    // Icons and links between the pages stay at the root, where the pages are.
+    for (const html of [index, sheet]) {
+      assert.match(html, /<link rel="icon" href="apple-touch-icon\.png">/);
+      assert.match(html, /href="index\.html"/);
+      assert.match(html, /href="schedule\.html"/);
+    }
+    // Apart from the asset URLs and the date stamp, the pages are the repo's.
+    assert.equal(index.replaceAll(`${assets}/`, ""), read("index.html"));
+    assert.match(sheet, /Last updated: <span id="lastUpdated">\d{1,2}\/\d{1,2}\/\d{2}<\/span>/);
+    assert.equal(sheet.replaceAll(`${assets}/`, "").replace(/(<span id="lastUpdated">)[^<]*/, "$1"), read("schedule.html").replace(/(<span id="lastUpdated">)[^<]*/, "$1"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the built site: a new commit gives every script and stylesheet a new URL", { skip: process.platform !== "linux" }, () => {
+  const roots = ["aaaaaaaa11111111", "bbbbbbbb22222222"].map(buildSite);
+  try {
+    const [first, second] = roots.map(root => [
+      ...loadedAssets(readFileSync(join(root, "_site", "index.html"), "utf8")),
+      ...loadedAssets(readFileSync(join(root, "_site", "schedule.html"), "utf8"))
+    ]);
+    assert.equal(first.length, 4);
+    for (const url of first) assert.ok(!second.includes(url), url);
+    assert.ok(first.every(url => url.startsWith("assets-aaaaaaaa/")) && second.every(url => url.startsWith("assets-bbbbbbbb/")));
+  } finally {
+    for (const root of roots) rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the build stops if a page loads a script the versioning step does not move", { skip: process.platform !== "linux" }, () => {
+  const root = scratchCopy();
+  try {
+    runStep(root, ASSEMBLE_STEP);
+    // A script added to the page later, which the step knows nothing about.
+    const page = join(root, "_site", "index.html");
+    writeFileSync(page, readFileSync(page, "utf8").replace("</body>", '<script type="module" src="extra.js"></script>\n</body>'));
+    cpSync(join(root, "app.js"), join(root, "_site", "extra.js"));
+    assert.throws(
+      () => runStep(root, VERSION_STEP, "cccccccc33333333"),
+      error => /not in assets-cccccccc/.test(String(error.stderr))
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 /* ---------- Page markup and privacy ---------- */
