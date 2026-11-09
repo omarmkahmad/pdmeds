@@ -1,8 +1,8 @@
-// The dose time sheet. This file imports nothing on purpose: the Pages build
-// copies it and cache-busts it (?v=) as one file, so an imported module could
-// be missing or out of date next to it. The pure helpers are exported for
-// test/schedule-handoff.test.js; the page code below them runs only in a
-// browser.
+// The dose time sheet. This file imports nothing on purpose, so the page
+// needs only this one script. (The Pages build puts every script in a folder
+// named after the commit, so a deploy never mixes old and new files.) The
+// pure helpers are exported for test/schedule-handoff.test.js; the page code
+// below them runs only in a browser.
 
 /* ---------- Pure helpers ---------- */
 

@@ -96,6 +96,8 @@ Amantadine curves are in ng/mL for a typical PD patient at steady state. The lev
 
 Pull requests and pushes are validated by GitHub Actions. A successful push to `main` packages the static assets and deploys them to GitHub Pages.
 
+The Pages build moves every script and stylesheet into a folder named after the commit (`assets-<commit>/`) and points both pages at it. Browsers keep Pages files for 10 minutes, so with fixed file names a reload just after a deploy could show the old version, or mix a new script with an old module. With a new folder per commit, a normal reload always loads the new set. The files in the repository keep their plain names, so the site still runs as it is from a local server.
+
 ## Privacy
 
 The app has no analytics, cookies, accounts, or backend. Regimen data remains in the current browser unless the user explicitly copies or downloads it.
