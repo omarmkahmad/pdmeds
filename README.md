@@ -45,7 +45,7 @@ Crexont was approved after that review, so its LEDD factor (×0.5, the Rytary fa
 
 Amantadine counts toward LEDD by its hydrochloride mg: immediate release ×1 and Gocovri ×1.25 (both from Jost 2023). Gocovri capsules are labeled in mg of amantadine, and 137 mg is 170 mg of the hydrochloride, so 274 mg counts as 340 × 1.25 = 425 mg.
 
-## Model evidence (model 4.1.0)
+## Model evidence (model 4.2.0)
 
 The chart's unit is anchored to immediate-release levodopa: one 100 mg IR dose peaks at 100. In advanced PD that peak averages about 1,450 ng/mL, with wide variation between people.
 
@@ -61,22 +61,29 @@ The Rytary and Crexont shapes are fitted to single doses in the same advanced-PD
 
 `test/pk.test.js` checks every preparation against its published ranges, so a parameter change that moves a curve outside the evidence fails the tests. Other sources: the US labels for all five products; the FDA clinical pharmacology reviews for NDA 203312 (Rytary), 217186 (Crexont), and 209184 (Inbrija); Hsu 2015; LeWitt 2023; Mao 2013; Nutt 2008; Contin and Martinelli 2010; and Wach 2026.
 
-### Amantadine (added in model 4.1.0)
+### Amantadine (added in model 4.1.0, refit in 4.2.0)
 
-Amantadine curves are in ng/mL for a typical PD patient at steady state. The levodopa curves did not change.
+Amantadine curves are in ng/mL for a typical PD patient at steady state. The source is Hauser et al., Clin Pharmacokinet 2019 ([doi:10.1007/s40262-018-0663-4](https://doi.org/10.1007/s40262-018-0663-4)), with the US labels and the FDA review of NDA 208944.
 
-- **Size.** Steady-state curve area in healthy adults is 57.7 ng·h/mL per mg of amantadine hydrochloride (FDA review of NDA 208944, study PK-111). It is raised 1.6 times for the lower kidney clearance of the PD patients in the Gocovri trials (median creatinine clearance 74 vs 121 mL/min/1.73 m²; Hauser et al., Clin Pharmacokinet 2019, [doi:10.1007/s40262-018-0663-4](https://doi.org/10.1007/s40262-018-0663-4)). Gocovri has the same area per mg of hydrochloride as immediate release at steady state (58.5 vs 57.7).
-- **Immediate release.** Rise to a peak at 3 h, then half-life 16 h (label: peak at 2–4 h, half-life 16–17 h).
-- **Gocovri.** No rise for 3 h, then two overlapping parts that peak 8 h (55%) and 13 h (45%) after the dose, each with half-life 16 h. This gives the published steady-state shape: lowest in the first 3 h after a bedtime dose and highest about 8 h after it.
+- **Shape.** Each curve is fitted to the mean steady-state profile measured in healthy adults on day 7 (Hauser 2019, study 2, n = 23), read from the plotted points.
+  - **Immediate release** (Fig. 3b): rise to a peak at 2½ h, then half-life 16 h. Within 9% of the measured level at every sampled hour.
+  - **Gocovri** (Fig. 1c): no rise for 2½ h, then three overlapping parts that peak 5½ h (40%), 10 h (25%) and 17 h (35%) after the dose, each with half-life 16 h. Within 6% at every sampled hour: lowest about 2½ h after a bedtime dose, then a plateau from about 6 to 14 h.
+- **Size.** Steady-state curve area in healthy adults is 57.7 ng·h/mL per mg of amantadine hydrochloride (58.5 for Gocovri; the model uses one value for both). It is raised 1.6 times for the lower kidney clearance of the PD patients in the Gocovri trials (median creatinine clearance 74 vs 121 mL/min/1.73 m²), the correction the paper applies.
 
 | Schedule (steady state, PD patients) | Model | Published (Hauser 2019) |
 |---|---|---|
-| Gocovri 274 mg at 22:00: peak | 1,640 ng/mL | 1,690 (simulated) |
-| Gocovri 274 mg at 22:00: 06:00–18:00 average | 1,490 | 1,536 (simulated); about 1,500 measured 9–17 h after the dose |
-| IR 100 mg at 08:00 and 16:00: peak / 06:00–18:00 average | 990 / 740 | 967 / 751 |
-| IR 100 mg at 08:00, 12:00 and 16:00: peak / 06:00–18:00 average | 1,480 / 1,110 | 1,500 / 1,125 |
+| Gocovri 274 mg at 22:00: average 9–17 h after the dose | 1,470 ng/mL | about 1,410 measured in PD patients ("approximately 1,500" in the text) |
+| Gocovri 274 mg at 22:00: peak / 06:00–18:00 average / lowest | 1,560 / 1,430 / 910 | 1,690 / 1,536 / about 1,080 (simulated, Fig. 4) |
+| IR 100 mg at 08:00 and 16:00: peak / 06:00–18:00 average / lowest | 1,000 / 740 / 560 | 967 / 751 / about 536 (simulated) |
+| IR 100 mg at 08:00, 12:00 and 16:00: peak / 06:00–18:00 average | 1,490 / 1,120 | 1,500 / 1,125 (simulated) |
 
-`test/amantadine.test.js` holds these ranges (about ±7%), plus the healthy-volunteer and single-dose values. Not modeled: kidney function. Amantadine is cleared by the kidneys, so with lower clearance real levels are higher and the half-life is longer (29 h in older adults, per the label). Osmolex ER is not included.
+The paper's simulated Gocovri curve for PD patients has the same shape as the model but sits about 9% higher at every hour. The model keeps one PD scaling for both products because that reproduces the immediate-release simulations and the level actually measured in PD patients on 274 mg.
+
+Model 4.1.0 used a two-part Gocovri curve fitted to the paper's text and summary table alone. Against the plotted profile it was within about 5% at most hours but up to 15% too low 3 to 6 h after the dose, where it rose too slowly. Model 4.2.0 replaces it. For a 22:00 dose, the peak moved from 06:00 (1,640 ng/mL) to 08:00 (1,560); levels from the afternoon to bedtime changed by about 1%.
+
+`test/amantadine.test.js` holds the measured points and these ranges. Not modeled: kidney function. Amantadine is cleared by the kidneys, so with lower clearance real levels are higher and the half-life is longer (29 h in older adults, per the label). Osmolex ER is not included.
+
+The pooled phase 3 analysis of Gocovri (Elmer et al., CNS Drugs 2018, [doi:10.1007/s40263-018-0498-4](https://doi.org/10.1007/s40263-018-0498-4)) reports efficacy and safety, not blood levels, so it sets no curve parameter. It confirms the dosing the editor describes: 137 mg at bedtime for a week, then 274 mg.
 
 ## Project layout
 

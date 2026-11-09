@@ -1,6 +1,7 @@
-// Amantadine IR and Gocovri (model 4.1.0): the drug data, the curves against
-// their published steady-state values, LEDD, the editor arithmetic, the
-// analysis text and the second chart panel. Levodopa behaviour is covered by
+// Amantadine IR and Gocovri (added in model 4.1.0, curves refit to the
+// figures of Hauser 2019 in 4.2.0): the drug data, the curves against their
+// published steady-state values, LEDD, the editor arithmetic, the analysis
+// text and the second chart panel. Levodopa behaviour is covered by
 // the other test files, which this feature leaves as they were.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -109,7 +110,7 @@ function byClass(tree, name) {
 /* ---------- Drug data ---------- */
 
 test("amantadine IR and Gocovri are listed apart from the five levodopa preparations", () => {
-  assert.equal(MODEL_VERSION, "4.1.0");
+  assert.equal(MODEL_VERSION, "4.2.0");
   assert.deepEqual(AMANTADINE_ORDER, ["amantadine", "gocovri"]);
   assert.deepEqual(AMANTADINE_DRUGS.map(drug => drug.id), AMANTADINE_ORDER);
   assert.deepEqual(MEDICINE_ORDER, [...DRUG_ORDER, ...AMANTADINE_ORDER]);
@@ -285,28 +286,73 @@ test("levodopa and amantadine are never added into one level", () => {
 
 /* ---------- Published values the curves must stay inside ---------- */
 
-// Steady state in PD patients, simulated by Hauser 2019 (Clin Pharmacokinet
-// 58:77) from the healthy-volunteer study with clearance scaled for PD
-// patients, and the level measured in PD patients in the phase 2/3 trial.
-// Ranges are about ±7% around the published value: a refit that leaves them
-// fails here.
-test("Gocovri 274 mg at 22:00: peak about 1,690 ng/mL, daytime average about 1,536", () => {
+// Hauser RA, et al. Clin Pharmacokinet. 2019;58:77-88 (doi:10.1007/s40262-018-0663-4).
+// Healthy adults, day 7 of dosing (study 2, n = 23): mean plasma amantadine
+// by hour after the 20:00 dose, read from the plotted points.
+// Fig. 1c: Gocovri (ADS-5102) 137 mg once daily.
+const MEASURED_GOCOVRI_137 = [
+  [0, 311], [1, 304], [2, 295], [3, 310], [4, 385], [6, 481], [8, 482], [10, 492], [12, 473],
+  [13, 464], [14, 473], [15, 455], [16, 434], [18, 416], [20, 390], [22, 363], [24, 336]
+];
+// Fig. 3b: immediate release, 100 mg of the hydrochloride at 20:00 and 08:00.
+const MEASURED_IR_100_BID = [
+  [0, 382], [1, 441], [2, 545], [3, 555], [4, 540], [6, 490], [8, 432], [10, 402], [12, 382],
+  [13, 471], [14, 598], [15, 585], [16, 565], [18, 509], [20, 481], [22, 442], [24, 416]
+];
+// The model is scaled for PD patients: 1.6 times the healthy level.
+const PD_SCALE = 1.6;
+
+function worstMiss(total, doseHour, measured) {
+  return Math.max(...measured.map(([hour, level]) => Math.abs(total[((doseHour + hour) % 24) * 60] / PD_SCALE / level - 1)));
+}
+
+test("Gocovri follows the measured steady-state profile hour by hour (Hauser 2019, Fig. 1c)", () => {
+  const day = computeDay({ doses: [gocovri("g", "20:00", 1)] });
+  const miss = worstMiss(day.total, 20, MEASURED_GOCOVRI_137);
+  assert.ok(miss <= 0.07, `worst miss ${(miss * 100).toFixed(1)}% at a sampled hour, expected 7% or less`);
+  // The features the paper describes: lowest in the first 3 h after the dose,
+  // then a plateau from about 6 to 14 h, with the top of it 8 to 10 h after.
+  const hoursAfterDose = minute => ((minute - 20 * 60 + 1440) % 1440) / 60;
+  within(hoursAfterDose(day.minimumMinute), 1.5, 3.5, "hours from dose to the lowest level");
+  within(hoursAfterDose(day.maximumMinute), 6, 12, "hours from dose to the highest level");
+  const plateau = [6, 8, 10, 12, 14].map(hour => day.total[((20 + hour) % 24) * 60]);
+  assert.ok(Math.min(...plateau) / Math.max(...plateau) > 0.9, "6 to 14 h after the dose is flat to within 10%");
+  // Lowest to highest: 295 to 492 in the measured mean curve.
+  within(day.minimum / day.maximum, 0.55, 0.65, "lowest ÷ highest (measured 0.60)");
+});
+
+test("immediate-release amantadine follows its measured steady-state profile (Hauser 2019, Fig. 3b)", () => {
+  const day = computeDay({ doses: [amantadine("a", "20:00"), amantadine("b", "08:00")] });
+  const miss = worstMiss(day.total, 20, MEASURED_IR_100_BID);
+  assert.ok(miss <= 0.10, `worst miss ${(miss * 100).toFixed(1)}% at a sampled hour, expected 10% or less`);
+});
+
+// PD patients. Measured in the phase 2/3 trial 9 to 17 h after a 274 mg
+// bedtime dose: mean about 1,410 ng/mL, "approximately 1,500" in the text.
+// The paper's own simulation (Fig. 4) sits about 9% above the model at every
+// hour: peak 1,690, 06:00-18:00 average 1,536, lowest about 1,080.
+test("Gocovri 274 mg at 22:00 in PD patients: the measured level, and the published simulation", () => {
   const day = computeDay({ doses: [gocovri("g", "22:00")] });
-  within(day.maximum, 1570, 1810, "peak (published 1,690)");
-  within(average(day.total, 6 * 60, 18 * 60), 1430, 1640, "06:00–18:00 average (published 1,536)");
-  // Measured in PD patients 9–17 h after the dose: about 1,500 ng/mL.
-  within(average(day.total, 7 * 60, 15 * 60), 1400, 1650, "level 9–17 h after the dose (measured about 1,500)");
-  // Lowest in the first hours after the dose; highest in the morning, about
-  // 8 h after it (reported range of the steady-state peak time: 4–18 h).
-  const hoursAfterDose = minute => ((minute - 22 * 60 + 1440) % 1440) / 60;
-  within(hoursAfterDose(day.minimumMinute), 0, 4, "hours from dose to the lowest level");
-  within(hoursAfterDose(day.maximumMinute), 4, 18, "hours from dose to the highest level");
-  assert.ok(day.total[8 * 60] > day.total[20 * 60], "higher at 08:00 than at 20:00");
+  within(average(day.total, 7 * 60, 15 * 60), 1350, 1560, "level 9–17 h after the dose (measured about 1,410–1,500)");
+  within(day.maximum, 1480, 1700, "peak (simulated 1,690)");
+  within(average(day.total, 6 * 60, 18 * 60), 1360, 1580, "06:00–18:00 average (simulated 1,536)");
+  // The simulated curve by hour after the dose (Fig. 4). The model has the
+  // same shape, a little lower: every ratio falls in one narrow band.
+  const simulated = [[0, 1137], [2, 1084], [4, 1338], [6, 1621], [8, 1683], [10, 1667], [12, 1623], [14, 1553], [16, 1474], [18, 1390], [20, 1307], [22, 1223]];
+  const ratios = simulated.map(([hour, level]) => day.total[((22 + hour) % 24) * 60] / level);
+  within(Math.min(...ratios), 0.84, 1, "lowest model ÷ simulation");
+  within(Math.max(...ratios), 0.84, 1, "highest model ÷ simulation");
+  assert.ok(Math.max(...ratios) - Math.min(...ratios) < 0.1, "the shape matches: ratios within 10 points of each other");
+  // High on waking and through the day, lower in the evening.
+  assert.equal(day.maximumMinute, 8 * 60);
+  assert.equal(day.minimumMinute, 30);
+  assert.ok(day.total[8 * 60] > day.total[20 * 60] * 1.2, "higher at 08:00 than at 20:00");
 });
 
 test("immediate-release amantadine 100 mg: published twice- and three-times-daily values", () => {
   const twice = computeDay({ doses: [amantadine("a", "08:00"), amantadine("b", "16:00")] });
   within(twice.maximum, 900, 1035, "08:00 + 16:00 peak (published 967)");
+  within(twice.minimum, 495, 580, "08:00 + 16:00 lowest (published simulation: about 536)");
   within(average(twice.total, 6 * 60, 18 * 60), 700, 805, "08:00 + 16:00 daytime average (published 751)");
   const thrice = computeDay({ doses: [amantadine("a", "08:00"), amantadine("b", "12:00"), amantadine("c", "16:00")] });
   within(thrice.maximum, 1395, 1605, "three times a day peak (published 1,500)");
@@ -324,15 +370,18 @@ test("Gocovri at bedtime gives higher daytime levels than IR, 1.4 to 2 times (Ha
 });
 
 test("healthy-volunteer values come back when the PD scaling is taken out", () => {
-  // FDA review, study PK-111, day 7. Gocovri 137 mg at 20:00: Cmax 536,
-  // Cmin 285, Cavg 414 ng/mL. IR 100 mg every 12 h: Cmax 612, Cmin 366, Cavg 481.
+  // Hauser 2019, Table 3 (the same study as the FDA review's PK-111), day 7.
+  // The table's Cmax and Cmin average each person's own highest and lowest
+  // value, whenever it came, so they sit outside the mean curve: Gocovri
+  // 137 mg, 536 and 285 (mean curve 492 and 295); IR 100 mg every 12 h, 612
+  // and 366 (mean curve 598 and 382). The average level is the same either way.
   const er = computeDay({ doses: [gocovri("g", "20:00", 1)] });
-  within(er.maximum / 1.6, 480, 575, "Gocovri Cmax (536)");
-  within(er.minimum / 1.6, 255, 315, "Gocovri Cmin (285)");
+  within(er.maximum / 1.6, 455, 540, "Gocovri highest (492 to 536)");
+  within(er.minimum / 1.6, 265, 315, "Gocovri lowest (285 to 295)");
   within(average(er.total, 0, 1440) / 1.6, 395, 435, "Gocovri Cavg (414)");
   const irDay = computeDay({ doses: [amantadine("a", "08:00"), amantadine("b", "20:00")] });
-  within(irDay.maximum / 1.6, 550, 660, "IR Cmax (612)");
-  within(irDay.minimum / 1.6, 330, 405, "IR Cmin (366)");
+  within(irDay.maximum / 1.6, 550, 660, "IR highest (598 to 612)");
+  within(irDay.minimum / 1.6, 345, 405, "IR lowest (366 to 382)");
   within(average(irDay.total, 0, 1440) / 1.6, 455, 505, "IR Cavg (481)");
 });
 
@@ -345,12 +394,15 @@ test("single doses: IR peaks at 2–4 h, Gocovri at 6–20 h with little absorbe
   };
   const irCurve = single(DRUG_BY_ID.amantadine, 100);
   const irPeak = Math.max(...irCurve);
-  within(irCurve.indexOf(irPeak) / 60, 2, 4, "IR time to peak (label 2–4 h)");
+  within(irCurve.indexOf(irPeak) / 60, 2, 4, "IR time to peak (label 2–4 h; Hauser 2019: median 3 h)");
   // Label: 0.22–0.24 µg/mL after 100 mg in healthy adults.
   within(irPeak / 1.6, 200, 260, "IR single-dose peak in healthy adults");
   const erCurve = single(DRUG_BY_ID.gocovri, 137);
   const erPeak = Math.max(...erCurve);
   within(erCurve.indexOf(erPeak) / 60, 6, 20, "Gocovri time to peak (label: median 12 h, range 6–20)");
+  // Nothing in the first 2 h: the lag was 2 to 4 h in every dose group (Hauser 2019, Table 2).
+  assert.equal(erCurve[120], 0);
+  assert.ok(erCurve[240] > 0);
   // Share of the total area in the first 8 h: 8% for Gocovri, 28% for IR (Hauser 2019).
   const early = curve => curve.slice(0, 480).reduce((a, b) => a + b, 0) / curve.reduce((a, b) => a + b, 0);
   within(early(erCurve) * 100, 5, 11, "Gocovri share of area in the first 8 h (8%)");
@@ -456,7 +508,7 @@ test("a schedule with amantadine survives a save and open", () => {
   const state = { doses: [...WITH_GOCOVRI, { id: "m", time: "08:00", drug: "amantadine", strength: null, count: null, dose: 50 }] };
   const file = JSON.parse(JSON.stringify(exportRegimen(state)));
   assert.equal(file.schemaVersion, 2);
-  assert.equal(file.modelVersion, "4.1.0");
+  assert.equal(file.modelVersion, "4.2.0");
   assert.deepEqual(file.doses.at(-2), { time: "22:00", drug: "gocovri", dose: 274, strength: "137", count: 2 });
   assert.deepEqual(file.doses.at(-1), { time: "08:00", drug: "amantadine", dose: 50 });
   const opened = validateRegimenPayload(file);
@@ -510,7 +562,7 @@ test("amantadine sentences say when it is high and low, and what it is at the le
   const analysis = analyzeDay(WITH_GOCOVRI);
   const { stats, atDoses } = analysis.amantadine;
   const [first, second] = amantadineSentences(analysis);
-  assert.equal(first, `Amantadine is highest at 06:00 (about ${ngText(stats.max)} ng/mL) and lowest at 01:00 (about ${ngText(stats.min)}).`);
+  assert.equal(first, `Amantadine is highest at 08:00 (about ${ngText(stats.max)} ng/mL) and lowest at 00:30 (about ${ngText(stats.min)}).`);
   assert.equal(second, `At your levodopa dose times it is between ${ngText(atDoses.at(-1).level)} and ${ngText(atDoses[0].level)} ng/mL `
     + `(${Math.round(atDoses.at(-1).share * 100)}–${Math.round(atDoses[0].share * 100)}% of its peak): lowest at the 19:00 dose, highest at the 07:00 dose.`);
   // One levodopa dose time.
@@ -531,7 +583,7 @@ test("the amantadine readout and description follow the curve", () => {
   const total = analysis.amantadine.computed.total;
   assert.equal(amantadineValueText(analysis, 540), `amantadine about ${ngText(total[540])} ng/mL`);
   assert.equal(amantadineReadout(analysis, 540), `09:00 · amantadine about ${ngText(total[540])} ng/mL · ${Math.round(total[540] / analysis.amantadine.stats.max * 100)}% of its peak`);
-  assert.equal(amantadineReadout(analysis, 360), `06:00 · amantadine about ${ngText(total[360])} ng/mL · 100% of its peak`);
+  assert.equal(amantadineReadout(analysis, 480), `08:00 · amantadine about ${ngText(total[480])} ng/mL · 100% of its peak`);
   const desc = amantadineDesc(analysis);
   assert.ok(desc.startsWith(amantadineSentences(analysis).join(" ")));
   assert.match(desc, /Amantadine at each levodopa dose: 07:00 [\d,]+, 11:00 [\d,]+, 15:00 [\d,]+, 19:00 [\d,]+\.$/);
@@ -541,13 +593,13 @@ test("status, answer bar and hour table include amantadine", () => {
   const analysis = analyzeDay(WITH_GOCOVRI);
   const status = statusMessage(analysis, 5);
   assert.match(status, /^Updated\. 5 doses, 400 mg levodopa \(LEDD 400\) \+ amantadine \(LEDD 425\) = 825 mg LEDD a day\. /);
-  assert.match(status, / Amantadine highest about 1,6\d0 ng\/mL at 06:00\.$/);
+  assert.match(status, / Amantadine highest about 1,5\d0 ng\/mL at 08:00\.$/);
   // Levodopa only: the message is the one the app always had.
   assert.match(statusMessage(analyzeDay(LEVODOPA_DAY), 4), /^Updated\. 4 doses, 400 mg levodopa = 400 mg LEDD a day\. .* Highest \d+ at \d\d:\d\d\.$/);
   // Amantadine only.
   const only = analyzeDay([gocovri("g", "22:00")]);
-  assert.match(statusMessage(only, 1), /^Updated\. 1 dose, 0 mg levodopa \(LEDD 0\) \+ amantadine \(LEDD 425\) = 425 mg LEDD a day\. Amantadine highest about [\d,]+ ng\/mL at 06:00\.$/);
-  assert.equal(answerBarLow(only), "Amantadine peaks at 06:00 ↓");
+  assert.match(statusMessage(only, 1), /^Updated\. 1 dose, 0 mg levodopa \(LEDD 0\) \+ amantadine \(LEDD 425\) = 425 mg LEDD a day\. Amantadine highest about [\d,]+ ng\/mL at 08:00\.$/);
+  assert.equal(answerBarLow(only), "Amantadine peaks at 08:00 ↓");
   assert.deepEqual(headlineSentences(only), []);
   assert.match(answerBarLow(analysis), /^Dips to \d+ at \d\d:\d\d ↓$/);
   const rows = hourlyRows(analysis);
@@ -569,12 +621,12 @@ test("pin to compare keeps the amantadine curve and names what changed", () => {
   assert.equal(compareModel(analyzeDay(WITH_GOCOVRI), pinned).sentence, "The curve is almost the same as the pinned day. Daily levodopa is the same (400 mg).");
   // Gocovri moved to the morning: same height, different time.
   const moved = compareModel(analyzeDay([...LEVODOPA_DAY, gocovri("g1", "08:00")]), pinned);
-  assert.equal(moved.sentence, "Compared with the pinned day: the amantadine peak moves from 06:00 to 16:00. Daily levodopa is the same (400 mg).");
+  assert.equal(moved.sentence, "Compared with the pinned day: the amantadine peak moves from 08:00 to 18:00. Daily levodopa is the same (400 mg).");
   // Swapped for immediate release: lower, later, and a different LEDD.
   const swapped = compareModel(analyzeDay(WITH_IR), pinned);
-  assert.match(swapped.sentence, /^Compared with the pinned day: the highest amantadine level falls from 1,6\d0 to 9\d0 ng\/mL \(now at 19:00\)\. Daily levodopa is the same \(400 mg; LEDD 825 → 600\)\.$/);
+  assert.match(swapped.sentence, /^Compared with the pinned day: the highest amantadine level falls from 1,5\d0 to 1,0\d0 ng\/mL \(now at 18:30\)\. Daily levodopa is the same \(400 mg; LEDD 825 → 600\)\.$/);
   // Added and removed.
-  assert.match(compareModel(analyzeDay(WITH_GOCOVRI), pinSnapshot(analyzeDay(LEVODOPA_DAY))).sentence, /amantadine is added \(highest about [\d,]+ ng\/mL at 06:00\)/);
+  assert.match(compareModel(analyzeDay(WITH_GOCOVRI), pinSnapshot(analyzeDay(LEVODOPA_DAY))).sentence, /amantadine is added \(highest about [\d,]+ ng\/mL at 08:00\)/);
   assert.match(compareModel(analyzeDay(LEVODOPA_DAY), pinned).sentence, /amantadine is removed\. Daily levodopa is the same \(400 mg; LEDD 825 → 400\)\.$/);
   for (const result of [moved, swapped]) assert.doesNotMatch(result.sentence, /\b(better|worse|because)\b/i);
 });
