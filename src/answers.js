@@ -1,10 +1,10 @@
 // The answers around the chart: the level before each dose, headline
 // sentences, tiles, readout, pin to compare, the hour table and the time
 // sheet rows. Pure: no DOM. Levels stay raw here and are rounded only in text.
-import { DRUG_BY_ID } from "./drugs.js";
+import { DRUG_BY_ID, analyteOf } from "./drugs.js";
 import { computeDay, formatDuration } from "./model.js";
 import { formatClock, formatCount, formatNumber, formatRange } from "./time.js";
-import { dailyTotals, strengthOf } from "./amounts.js";
+import { dailyTotals, leddParts, strengthMg, strengthOf, totalsLine } from "./amounts.js";
 
 const DAY = 1440;
 const GROUP_GAP = 45;
@@ -21,6 +21,10 @@ const SHEET_ROWS = 12;
 const SHEET_NAME_MAX = 60;
 const MINUS = "\u2212";
 const EPSILON = 1e-6;
+// An amantadine change worth a sentence while pinned: the peak moves by this
+// share of the pinned peak, or by this many minutes.
+const AMANTADINE_CHANGE = 0.05;
+const AMANTADINE_SHIFT = 60;
 
 const PINNED_NOTE = "Comparing with the day you pinned (grey dashed line).";
 
@@ -42,6 +46,14 @@ function countedDoses(doses) {
     .map((dose, index) => ({ dose, index, minute: clockMinute(dose.time) }))
     .sort((a, b) => a.minute - b.minute || a.index - b.index)
     .map(item => item.dose);
+}
+
+const isLevodopaDose = dose => analyteOf(DRUG_BY_ID[dose.drug]) === "levodopa";
+
+// The doses that make the levodopa level. Amantadine doses are analyzed
+// apart (analysis.amantadine) and never add to it.
+function levodopaDoses(doses) {
+  return countedDoses(doses).filter(isLevodopaDose);
 }
 
 function lineValue(value) {
@@ -71,7 +83,7 @@ function circularDistance(a, b) {
 // Dose times 45 min or less apart share a group; the day is circular, so a
 // group can span midnight. Such a group comes first and has start > end.
 export function doseGroups(doses) {
-  const list = countedDoses(doses);
+  const list = levodopaDoses(doses);
   const times = [...new Set(list.map(dose => clockMinute(dose.time)))].sort((a, b) => a - b);
   const spans = [];
   for (const time of times) {
@@ -227,8 +239,36 @@ export function rangeText(ranges) {
 
 /* ---------- The central analysis ---------- */
 
+// The amantadine level over the same repeating day, in typical ng/mL, and
+// what it is at each levodopa dose time (one entry per "before" row).
+function analyzeAmantadine(list, before) {
+  if (!list.length) return null;
+  const computed = computeDay({ doses: list.map(dose => ({ time: dose.time, drug: dose.drug, dose: dose.dose })) });
+  const total = computed.total;
+  let sum = 0;
+  for (let minute = 0; minute < DAY; minute += 1) sum += valueAt(total, minute);
+  const max = computed.maximum;
+  const atDoses = before.map(row => {
+    const level = valueAt(total, row.groupStart);
+    return { number: row.number, label: row.label, minute: row.groupStart, level, share: max > 0 ? level / max : 0 };
+  });
+  return {
+    doses: list,
+    computed,
+    stats: {
+      min: computed.minimum,
+      minMinute: computed.minimumMinute,
+      max,
+      maxMinute: computed.maximumMinute,
+      mean: sum / DAY
+    },
+    atDoses
+  };
+}
+
 export function analyzeDay(doses, lines = { target: null, high: null }) {
-  const list = countedDoses(doses);
+  const all = countedDoses(doses);
+  const list = all.filter(isLevodopaDose);
   // Only what the model needs, so no stale field (such as hidden) changes the total.
   const computed = computeDay({ doses: list.map(dose => ({ time: dose.time, drug: dose.drug, dose: dose.dose })) });
   const total = computed.total;
@@ -269,8 +309,92 @@ export function analyzeDay(doses, lines = { target: null, high: null }) {
     belowMinutes,
     aboveMinutes,
     targetFraction: belowMinutes === null ? null : (DAY - belowMinutes) / DAY,
-    totals: dailyTotals(list)
+    // mg is levodopa only; led and ledd count every medicine.
+    totals: dailyTotals(all),
+    ledd: leddParts(all),
+    amantadine: analyzeAmantadine(all.filter(dose => !isLevodopaDose(dose)), before)
   };
+}
+
+/* ---------- Amantadine (its own chart, in typical ng/mL) ---------- */
+
+// Typical ng/mL vary widely between people, so they are shown to the nearest 10.
+export function ngText(value) {
+  const number = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return formatNumber(number >= 100 ? Math.round(number / 10) * 10 : Math.round(number), 0);
+}
+
+const shareText = share => `${Math.round(share * 100)}%`;
+
+// The sentences above the amantadine chart: the day's high and low, then the
+// level at the levodopa dose times.
+export function amantadineSentences(analysis) {
+  const amantadine = analysis?.amantadine;
+  if (!amantadine) return [];
+  const { stats, atDoses } = amantadine;
+  const sentences = [`Amantadine is highest at ${formatClock(stats.maxMinute)} (about ${ngText(stats.max)} ng/mL) `
+    + `and lowest at ${formatClock(stats.minMinute)} (about ${ngText(stats.min)}).`];
+  if (atDoses.length === 1) {
+    const only = atDoses[0];
+    sentences.push(`At the ${only.label} levodopa dose it is about ${ngText(only.level)} ng/mL `
+      + `(${shareText(only.share)} of its peak).`);
+  } else if (atDoses.length > 1) {
+    const low = atDoses.reduce((best, item) => (item.level < best.level ? item : best));
+    const high = atDoses.reduce((best, item) => (item.level > best.level ? item : best));
+    const levels = ngText(low.level) === ngText(high.level)
+      ? `about ${ngText(low.level)} ng/mL`
+      : `between ${ngText(low.level)} and ${ngText(high.level)} ng/mL`;
+    const shares = shareText(low.share) === shareText(high.share)
+      ? shareText(low.share)
+      : `${Math.round(low.share * 100)}–${shareText(high.share)}`;
+    sentences.push(`At your levodopa dose times it is ${levels} (${shares} of its peak): `
+      + `lowest at the ${low.label} dose, highest at the ${high.label} dose.`);
+  }
+  return sentences;
+}
+
+// "amantadine about 1,580 ng/mL", for the readout and the slider's value text.
+export function amantadineValueText(analysis, minute) {
+  const amantadine = analysis?.amantadine;
+  if (!amantadine) return "";
+  return `amantadine about ${ngText(valueAt(amantadine.computed.total, cursorMinute(minute)))} ng/mL`;
+}
+
+// "09:00 · amantadine about 1,580 ng/mL · 97% of its peak"
+export function amantadineReadout(analysis, minute) {
+  const amantadine = analysis?.amantadine;
+  if (!amantadine) return "";
+  const at = cursorMinute(minute);
+  const parts = [formatClock(at), amantadineValueText(analysis, at)];
+  if (amantadine.stats.max > 0) {
+    parts.push(`${shareText(valueAt(amantadine.computed.total, at) / amantadine.stats.max)} of its peak`);
+  }
+  return parts.join(" · ");
+}
+
+// What the amantadine chart draws: its own doses and total, and a numbered
+// marker on the curve at each levodopa dose time (the numbers match the
+// "Level before each dose" rows). No lines: the target and high lines are on
+// the levodopa scale.
+export function amantadinePanel(analysis) {
+  const amantadine = analysis?.amantadine;
+  if (!amantadine) return null;
+  return {
+    doses: amantadine.doses,
+    computed: amantadine.computed,
+    before: amantadine.atDoses.map(item => ({ number: item.number, minute: item.minute, level: item.level })),
+    lines: { target: null, high: null }
+  };
+}
+
+export function amantadineDesc(analysis) {
+  const amantadine = analysis?.amantadine;
+  if (!amantadine) return "";
+  const parts = [...amantadineSentences(analysis)];
+  if (amantadine.atDoses.length) {
+    parts.push(`Amantadine at each levodopa dose: ${amantadine.atDoses.map(item => `${item.label} ${ngText(item.level)}`).join(", ")}.`);
+  }
+  return parts.join(" ");
 }
 
 /* ---------- Headline (SPEC 4.2) ---------- */
@@ -517,8 +641,33 @@ export function pinSnapshot(analysis) {
     lowestBefore: stats.lowestBefore ? { ...stats.lowestBefore } : null,
     before: analysis.before.map(row => ({ ...row })),
     totals: { mg: analysis.totals.mg, led: analysis.totals.led },
-    doseCount: analysis.doses.length
+    doseCount: analysis.doses.length,
+    amantadine: analysis.amantadine
+      ? {
+        total: new Float64Array(analysis.amantadine.computed.total),
+        max: analysis.amantadine.stats.max,
+        maxMinute: analysis.amantadine.stats.maxMinute
+      }
+      : null
   };
+}
+
+// The amantadine clause of the compare sentence, or null when its curve is
+// about the same as on the pinned day.
+function amantadineClause(analysis, snapshot) {
+  const now = analysis.amantadine?.stats ?? null;
+  const was = snapshot.amantadine ?? null;
+  if (!now && !was) return null;
+  if (!was) return `amantadine is added (highest about ${ngText(now.max)} ng/mL at ${formatClock(now.maxMinute)})`;
+  if (!now) return "amantadine is removed";
+  const moved = circularDistance(now.maxMinute, was.maxMinute) >= AMANTADINE_SHIFT;
+  const changed = Math.abs(now.max - was.max) >= AMANTADINE_CHANGE * was.max && ngText(now.max) !== ngText(was.max);
+  if (changed) {
+    return `the highest amantadine level ${now.max > was.max ? "rises" : "falls"} from ${ngText(was.max)} to ${ngText(now.max)} ng/mL `
+      + `(now at ${formatClock(now.maxMinute)})`;
+  }
+  if (moved) return `the amantadine peak moves from ${formatClock(was.maxMinute)} to ${formatClock(now.maxMinute)}`;
+  return null;
 }
 
 // Current and pinned groups within 90 min, one-to-one, closest pairs first.
@@ -589,6 +738,8 @@ export function compareModel(analysis, snapshot) {
   if (belowWas !== null && typeof belowNow === "number" && Math.abs(belowNow - belowWas) >= CHANGE_MINUTES) {
     clauses.push(`time below your target line goes from ${formatDuration(belowWas)} to ${formatDuration(belowNow)}`);
   }
+  const amantadine = amantadineClause(analysis, snapshot);
+  if (amantadine) clauses.push(amantadine);
   const totals = totalsClause(analysis.totals, snapshot.totals);
   const sentence = clauses.length
     ? `Compared with the pinned day: ${clauses.join("; ")}. ${totals}`
@@ -606,16 +757,25 @@ function hourStatus(value, lines) {
   return status ?? "";
 }
 
+// With amantadine doses, each row also carries the amantadine level (ng/mL)
+// and the doses column lists both kinds of dose in time order.
 export function hourlyRows(analysis) {
   const rows = [];
+  const amantadine = analysis.amantadine ?? null;
+  const all = [...(analysis.doses ?? []), ...(amantadine?.doses ?? [])]
+    .map((dose, index) => ({ dose, index, minute: clockMinute(dose.time) }))
+    .sort((a, b) => a.minute - b.minute || a.index - b.index)
+    .map(item => item.dose);
   for (let hour = 0; hour < 24; hour += 1) {
     const minute = hour * 60;
     const value = valueAt(analysis.computed?.total, minute);
-    const doses = (analysis.doses ?? [])
+    const doses = all
       .filter(dose => Math.floor(clockMinute(dose.time) / 60) === hour)
       .map(dose => `${dose.time} ${DRUG_BY_ID[dose.drug].shortName} ${formatNumber(dose.dose)} mg`)
       .join(", ");
-    rows.push({ time: formatClock(minute), level: levelText(value), doses, compared: hourStatus(value, analysis.lines) });
+    const row = { time: formatClock(minute), level: levelText(value), doses, compared: hourStatus(value, analysis.lines) };
+    if (amantadine) row.amantadine = ngText(valueAt(amantadine.computed.total, minute));
+    rows.push(row);
   }
   return rows;
 }
@@ -630,21 +790,32 @@ export function chartDesc(analysis) {
 }
 
 export function statusMessage(analysis, count) {
-  const doses = Number.isInteger(count) ? count : (analysis?.doses?.length ?? 0);
+  const amantadine = analysis?.amantadine ?? null;
+  const total = (analysis?.doses?.length ?? 0) + (amantadine?.doses.length ?? 0);
+  const doses = Number.isInteger(count) ? count : total;
   const countText = plural(doses, "dose", "doses");
-  if (!analysis?.doses?.length) return `Updated. ${countText}.`;
+  if (!total) return `Updated. ${countText}.`;
   const { stats, totals } = analysis;
-  const low = stats.lowestBefore
-    ? `${lowestBeforeLabel(analysis)} ${levelText(stats.lowestBefore.level)} at ${formatClock(stats.lowestBefore.minute)}.`
-    : `Lowest ${levelText(stats.min)} at ${formatClock(stats.minMinute)}.`;
-  return `Updated. ${countText}, ${formatNumber(totals.mg)} mg levodopa = ${formatNumber(totals.led)} mg LEDD a day. `
-    + `${low} Highest ${levelText(stats.max)} at ${formatClock(stats.maxMinute)}.`;
+  const parts = [`Updated. ${countText}, ${totalsLine(totals, analysis.ledd, " a day")}.`];
+  if (analysis.doses.length) {
+    parts.push(stats.lowestBefore
+      ? `${lowestBeforeLabel(analysis)} ${levelText(stats.lowestBefore.level)} at ${formatClock(stats.lowestBefore.minute)}.`
+      : `Lowest ${levelText(stats.min)} at ${formatClock(stats.minMinute)}.`);
+    parts.push(`Highest ${levelText(stats.max)} at ${formatClock(stats.maxMinute)}.`);
+  }
+  if (amantadine) {
+    parts.push(`Amantadine highest about ${ngText(amantadine.stats.max)} ng/mL at ${formatClock(amantadine.stats.maxMinute)}.`);
+  }
+  return parts.join(" ");
 }
 
 // The second line of the phone answer bar. It has about 155 px on a 360 px
 // screen, so the "was" form drops the time; the tiles still show it.
 export function answerBarLow(analysis, pinned = null) {
   const { stats } = analysis;
+  if (!analysis.doses.length && analysis.amantadine) {
+    return `Amantadine peaks at ${formatClock(analysis.amantadine.stats.maxMinute)} ↓`;
+  }
   const low = stats.lowestBefore;
   if (!low) return `Lowest: ${levelText(stats.min)} at ${formatClock(stats.minMinute)} ↓`;
   if (pinned?.lowestBefore && Math.round(pinned.lowestBefore.level) !== Math.round(low.level)) {
@@ -659,11 +830,11 @@ export function answerBarLow(analysis, pinned = null) {
 function sheetKey(dose, drug) {
   const strength = strengthOf(drug, dose.strength);
   const count = dose.count;
-  if (strength && typeof count === "number" && count > 0 && Math.abs(strength.levodopa * count - dose.dose) < EPSILON) {
+  if (strength && typeof count === "number" && count > 0 && Math.abs(strengthMg(strength) * count - dose.dose) < EPSILON) {
     const unit = count > 1 ? drug.unit[1] : drug.unit[0];
     return { key: `${drug.id}|${strength.id}|${count}`, name: `${drug.shortName} ${strength.label} · ${formatCount(count)} ${unit}` };
   }
-  return { key: `${drug.id}|mg|${dose.dose}`, name: `${drug.shortName} · ${formatNumber(dose.dose)} mg levodopa` };
+  return { key: `${drug.id}|mg|${dose.dose}`, name: `${drug.shortName} · ${formatNumber(dose.dose)} mg ${drug.mgName ?? "levodopa"}` };
 }
 
 export function buildSheetRows(doses) {

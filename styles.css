@@ -324,6 +324,8 @@ a:hover { color: var(--accent-hover); }
 .chip:has(input:checked) { border: 2px solid var(--ink); font-weight: 800; background: var(--row-open); }
 .chip:has(input:checked) .check { display: inline; }
 .chip:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 2px; }
+/* The small label above the amantadine products, inside the one radio group. */
+.chip-group { grid-column: 1 / -1; margin: 4px 0 -2px; color: var(--muted); font-size: 13px; font-weight: 700; }
 .generic { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
 @media (pointer: coarse) {
   .pointer-only { display: none; }
@@ -494,6 +496,11 @@ a:hover { color: var(--accent-hover); }
 .chart-wide .chart-tick { font-size: 13px; }
 .chart-svg.printing .chart-tick, .chart-svg.printing .chart-label, .chart-svg.printing .chart-marker-num { font-size: 10pt; }
 
+/* The amantadine chart: shorter, under the levodopa chart, same margins. */
+.amantadine-chart { min-height: 190px; }
+.amantadine-summary p { margin: 0 0 4px; font-size: 15px; }
+.no-levodopa { margin: 12px 0 0; color: var(--muted); font-size: 14px; }
+
 .slider-wrap { margin: 8px 0 4px; }
 .slider-wrap label { display: block; font-size: 14px; font-weight: 700; }
 .slider-wrap input[type="range"] { display: block; width: 100%; min-height: 44px; margin: 0; }
@@ -629,7 +636,7 @@ th { color: var(--muted); font-size: 13px; }
   .tile dd { display: inline; }
   .tile-value { display: inline; font-size: 11pt; }
   .tile-note, .tile-was { display: none; }
-  .headline p { margin: 0 0 2px; font-size: 10.5pt; }
+  .headline p, .amantadine-summary p { margin: 0 0 2px; font-size: 10.5pt; }
   .results-card h3 { margin: 8px 0 2px; font-size: 12pt; }
   .unit-line, .repeat-line { margin: 0; font-size: 9.5pt; }
   .chart-key { margin: 2px 0 4px; font-size: 9pt; }
@@ -637,6 +644,8 @@ th { color: var(--muted); font-size: 13px; }
   caption { padding: 4px 0 2px; font-size: 10.5pt; }
   .table-notes p, .range-lists p { margin: 2px 0; font-size: 9.5pt; }
   .chart, table, .tiles { break-inside: avoid; }
+  /* The amantadine heading, sentences and chart stay on one page together. */
+  #amantadineBlock { break-inside: avoid; }
   .chart { min-height: 0; }
   #printHeader h2 { margin: 0; font-size: 16pt; }
   #printHeader p, #printDoses p { margin: 2px 0; font-size: 10pt; }

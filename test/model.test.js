@@ -60,7 +60,7 @@ function amountOf(dose) {
 
 /* ---------- Drugs, LEDD and the steady state ---------- */
 
-test("only the five levodopa preparations are modeled", () => {
+test("DRUGS holds the five levodopa preparations (amantadine is listed apart)", () => {
   assert.deepEqual(DRUGS.map(drug => drug.id).sort(), ["crexont", "inbrija", "rytary", "sinemet", "sinemetcr"]);
   assert.ok(DRUGS.every(drug => drug.isLevodopa && drug.exposure.kind === "components"));
 });

@@ -1,6 +1,10 @@
 // The day chart: an SVG drawn at the container's real pixel width.
 // buildChartScene() is pure (a plain node tree, tested in node); createChart()
 // turns it into DOM and adds resizing, the cursor, highlighting and pointer input.
+// The same code draws the amantadine chart (variant "amantadine"): a shorter
+// panel in ng/mL on the same clock and the same left and right margins, so the
+// two plots line up when stacked. Two levels with different units get two
+// charts, never two y axes on one.
 import { DRUG_BY_ID, MINUTES_PER_DAY } from "./drugs.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -11,6 +15,7 @@ export const PRINT_WIDTH = 720;
 export const SNAP_MINUTES = 5;
 export const CURSOR_MAX = DAY - SNAP_MINUTES;
 export const CHART_TITLE = "Levodopa level over a typical day";
+export const AMANTADINE_TITLE = "Amantadine level over a typical day";
 
 // Every class the chart emits: the whole contract with styles.css. The
 // stylesheet sets text sizes only through these (SPEC 4.3, 9):
@@ -66,7 +71,9 @@ const FALLBACK_STYLES = {
   sinemetcr: { color: "#B35900", dash: "9 4" },
   rytary: { color: "#117733", dash: "4 3" },
   crexont: { color: "#882255", dash: "12 3 3 3" },
-  inbrija: { color: "#5E3C99", dash: "2 3" }
+  inbrija: { color: "#5E3C99", dash: "2 3" },
+  amantadine: { color: "#3D3DDB", dash: "6 2" },
+  gocovri: { color: "#D12C6A", dash: "10 3" }
 };
 
 export function curveStyle(drugId) {
@@ -82,12 +89,15 @@ export function doseCurveLook(state, pinned = false) {
   return { width: 1.5, opacity: 0.75 };
 }
 
-export function chartGeometry(width, { printing = false } = {}) {
+// `short` is the amantadine panel: the same width and margins as the levodopa
+// chart above it (so the hours line up), but less tall.
+export function chartGeometry(width, { printing = false, short = false } = {}) {
   const box = Math.floor(printing ? PRINT_WIDTH : Number(width) || 0);
   const w = Math.max(120, box);
   const compact = w < COMPACT_BELOW;
   // Print keeps the chart short so the whole summary fits one Letter page.
-  const height = compact || printing ? 260 : Math.round(Math.min(380, Math.max(300, 0.45 * w)));
+  let height = compact || printing ? 260 : Math.round(Math.min(380, Math.max(300, 0.45 * w)));
+  if (short) height = printing ? 170 : compact ? 190 : Math.round(Math.min(240, Math.max(200, 0.28 * w)));
   const margin = compact
     ? { left: 36, right: 8, top: 10, bottom: 46 }
     : { left: 42, right: 84, top: 12, bottom: 48 };
@@ -130,6 +140,25 @@ export function yScale(values) {
   const ticks = [];
   for (let value = 0; value <= top + 1e-9; value += step) ticks.push(value);
   return { top, step, ticks };
+}
+
+// The amantadine panel's axis: 0 to a round-up of 1.08 × the largest value in
+// at most 4 steps of 10, 20, 25 or 50 (× a power of ten), since the panel is
+// short. No floor at 100: ng/mL has no reference level.
+export function shortScale(values) {
+  let peak = 0;
+  for (const value of values) if (Number.isFinite(value) && value > peak) peak = value;
+  const raw = Math.max(peak * 1.08, 10);
+  for (let power = 10; ; power *= 10) {
+    for (const factor of [1, 2, 2.5, 5]) {
+      const step = factor * power;
+      const count = Math.ceil(raw / step - 1e-9);
+      if (count > 4) continue;
+      const ticks = [];
+      for (let index = 0; index <= count; index += 1) ticks.push(index * step);
+      return { top: count * step, step, ticks };
+    }
+  }
 }
 
 export function seriesMax(values) {
@@ -254,7 +283,10 @@ function strokeAttrs(style) {
 // layer: { labelledby, describedby, titleId, desc }.
 export function buildChartScene(analysis, options = {}, width = 0, a11y = {}) {
   const printing = Boolean(options.printing);
-  const g = chartGeometry(width, { printing });
+  // The amantadine panel has no 100 reference: its unit is ng/mL.
+  const amantadine = options.variant === "amantadine";
+  const title = amantadine ? AMANTADINE_TITLE : CHART_TITLE;
+  const g = chartGeometry(width, { printing, short: amantadine });
   const computed = analysis?.computed || {};
   const total = isSeries(computed.total) ? computed.total : new Float64Array(DAY + 1);
   const series = Array.isArray(computed.series) ? computed.series : [];
@@ -265,7 +297,9 @@ export function buildChartScene(analysis, options = {}, width = 0, a11y = {}) {
   const pinned = isSeries(options.pinnedTotal) ? options.pinnedTotal : null;
   const highlightId = printing || options.highlightId == null ? null : String(options.highlightId);
   const cursorMinute = normalizeMinute(options.cursorMinute);
-  const scale = yScale([seriesMax(total), target, high, pinned ? seriesMax(pinned) : 0]);
+  const scale = amantadine
+    ? shortScale([seriesMax(total), pinned ? seriesMax(pinned) : 0])
+    : yScale([seriesMax(total), target, high, pinned ? seriesMax(pinned) : 0]);
   const x = minute => g.plotLeft + (minute / DAY) * g.plotWidth;
   const y = value => g.plotBottom - (value / scale.top) * g.plotHeight;
 
@@ -354,7 +388,7 @@ export function buildChartScene(analysis, options = {}, width = 0, a11y = {}) {
   }
 
   // 3–6. Reference, target, high and pinned lines.
-  const lines = [hLine(100, LINE_STYLES.ref, "chart-ref", { "stroke-linecap": "round" })];
+  const lines = amantadine ? [] : [hLine(100, LINE_STYLES.ref, "chart-ref", { "stroke-linecap": "round" })];
   if (target !== null) lines.push(hLine(target, LINE_STYLES.target, "chart-target"));
   if (high !== null) lines.push(hLine(high, LINE_STYLES.high, "chart-high"));
   if (pinned) {
@@ -433,7 +467,7 @@ export function buildChartScene(analysis, options = {}, width = 0, a11y = {}) {
   // Right-margin labels on wide charts.
   const labelItems = [];
   if (g.labelsInMargin) {
-    labelItems.push({ key: "ref", text: "100 ref.", value: 100, fill: MUTED });
+    if (!amantadine) labelItems.push({ key: "ref", text: "100 ref.", value: 100, fill: MUTED });
     if (target !== null) labelItems.push({ key: "target", text: `Target ${formatLevel(target)}`, value: target, fill: LINE_STYLES.target.color });
     if (high !== null) labelItems.push({ key: "high", text: `High ${formatLevel(high)}`, value: high, fill: LINE_STYLES.high.color });
     if (pinned) labelItems.push({ key: "pinned", text: "Pinned", value: valueAt(pinned, DAY), fill: MUTED });
@@ -473,14 +507,14 @@ export function buildChartScene(analysis, options = {}, width = 0, a11y = {}) {
   if (pinned) svgClasses.push("chart-is-pinned");
   if (anyHighlight) svgClasses.push("chart-has-highlight");
   const head = [];
-  if (a11y.titleId) head.push(node("title", { id: a11y.titleId }, [], CHART_TITLE));
+  if (a11y.titleId) head.push(node("title", { id: a11y.titleId }, [], title));
   if (typeof a11y.desc === "string") head.push(node("desc", {}, [], a11y.desc));
 
   const root = node("svg", {
     class: svgClasses.join(" "),
     viewBox: `0 0 ${g.width} ${g.height}`, width: g.width, height: g.height,
     role: "img",
-    ...(a11y.labelledby ? { "aria-labelledby": a11y.labelledby } : { "aria-label": CHART_TITLE }),
+    ...(a11y.labelledby ? { "aria-labelledby": a11y.labelledby } : { "aria-label": title }),
     ...(a11y.describedby ? { "aria-describedby": a11y.describedby } : {})
   }, [
     ...head,
@@ -564,10 +598,10 @@ let chartCount = 0;
 
 // onDraw (optional, beyond API.md) runs after every draw, including resize
 // redraws, with plotBox(), so the app can keep the slider aligned.
-export function createChart(container, { onCursor, onDraw } = {}) {
+export function createChart(container, { onCursor, onDraw, variant = null } = {}) {
   chartCount += 1;
   const titleId = `chart-title-${chartCount}`;
-  const options = { cursorMinute: null, pinnedTotal: null, highlightId: null, printing: false };
+  const options = { cursorMinute: null, pinnedTotal: null, highlightId: null, printing: false, variant };
   let analysis = null;
   let svg = null;
   let info = null;

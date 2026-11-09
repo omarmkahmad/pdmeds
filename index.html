@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="See how a day of levodopa doses adds up, hour by hour. A teaching model, not dosing advice.">
+  <meta name="description" content="See how a day of levodopa doses adds up, hour by hour, with amantadine or Gocovri on the same clock. A teaching model, not dosing advice.">
   <meta name="theme-color" content="#004477">
   <meta name="format-detection" content="telephone=no">
   <meta name="apple-mobile-web-app-title" content="PD Meds">
@@ -41,7 +41,7 @@
         <span class="dose-count" id="doseCount"></span>
         <span class="badge" id="exampleBadge" hidden>Example</span>
       </div>
-      <p class="intro">Pick the tablet or capsule and how many. The app works out the levodopa mg.</p>
+      <p class="intro">Pick the tablet or capsule and how many. The app works out the levodopa mg. Amantadine and Gocovri can be added too: they get their own chart on the same clock.</p>
 
       <div class="empty-state" id="emptyDoses">
         <p>No doses yet. Add the first dose, or try an example to see how it works.</p>
@@ -97,16 +97,30 @@
         <p class="pinned-note" id="pinnedNote" hidden>Comparing with the day you pinned (grey dashed line).</p>
         <p class="compare-sentence" id="compareSentence" hidden></p>
 
-        <dl class="tiles" id="tiles"></dl>
-        <div class="tip tile-tip" id="tip-tiles" role="status"></div>
+        <div id="levodopaTop">
+          <dl class="tiles" id="tiles"></dl>
+          <div class="tip tile-tip" id="tip-tiles" role="status"></div>
 
-        <h3 id="chartTitle">Levodopa level over a typical day</h3>
-        <p class="unit-line">100 = the peak from one 100 mg immediate-release levodopa dose (e.g. one Sinemet 25/100 tablet). <button class="info" type="button" data-tip="level" aria-label="About the level" aria-expanded="false" aria-controls="tip-level">i</button></p>
-        <div class="tip" id="tip-level" role="status"></div>
-        <p class="repeat-line">The day repeats, so midnight includes what is left from last night’s doses.</p>
-        <p class="readout" id="readout"></p>
-        <div class="chart" id="chart" data-labelledby="chartTitle" data-describedby="chartDesc"></div>
-        <p class="sr-only" id="chartDesc"></p>
+          <h3 id="chartTitle">Levodopa level over a typical day</h3>
+          <p class="unit-line">100 = the peak from one 100 mg immediate-release levodopa dose (e.g. one Sinemet 25/100 tablet). <button class="info" type="button" data-tip="level" aria-label="About the level" aria-expanded="false" aria-controls="tip-level">i</button></p>
+          <div class="tip" id="tip-level" role="status"></div>
+          <p class="repeat-line">The day repeats, so midnight includes what is left from last night’s doses.</p>
+          <p class="readout" id="readout"></p>
+          <div class="chart" id="chart" data-labelledby="chartTitle" data-describedby="chartDesc"></div>
+          <p class="sr-only" id="chartDesc"></p>
+        </div>
+        <p class="no-levodopa" id="levodopaNone" hidden>No levodopa dose yet, so there is no levodopa level to show. Add one to see it above the amantadine chart.</p>
+
+        <div id="amantadineBlock" hidden>
+          <h3 id="amantadineTitle">Amantadine level over a typical day</h3>
+          <p class="unit-line">Typical ng/mL in a person with PD, on the same clock. Compare the timing, not the height. <button class="info" type="button" data-tip="amantadineLevel" aria-label="About the amantadine level" aria-expanded="false" aria-controls="tip-amantadineLevel">i</button></p>
+          <div class="tip" id="tip-amantadineLevel" role="status"></div>
+          <div class="amantadine-summary" id="amantadineSummary"></div>
+          <p class="readout" id="amantadineReadout"></p>
+          <div class="chart amantadine-chart" id="amantadineChart" data-labelledby="amantadineTitle" data-describedby="amantadineDesc"></div>
+          <p class="sr-only" id="amantadineDesc"></p>
+        </div>
+
         <div class="slider-wrap" id="sliderWrap">
           <label for="timeSlider">Time on chart</label>
           <input type="range" id="timeSlider" min="0" max="1435" step="5" value="0" aria-describedby="sliderHint">
@@ -114,6 +128,7 @@
         </div>
         <ul class="chart-key" id="chartKey" aria-label="Chart key"></ul>
 
+        <div id="levodopaBottom">
         <div class="table-wrap">
           <table class="before-table" id="beforeTable">
             <caption>Level before each dose</caption>
@@ -130,6 +145,19 @@
         </div>
         <div class="table-notes" id="beforeNotes"></div>
         <div class="range-lists" id="rangeLists"></div>
+        <div class="table-wrap" id="amantadineTableWrap" hidden>
+          <table class="before-table" id="amantadineTable">
+            <caption>Amantadine at each levodopa dose</caption>
+            <thead>
+              <tr>
+                <th scope="col">Levodopa dose</th>
+                <th scope="col">Amantadine then</th>
+                <th scope="col">Share of its peak</th>
+              </tr>
+            </thead>
+            <tbody id="amantadineBody"></tbody>
+          </table>
+        </div>
 
         <details class="inline-details" id="linesDetails">
           <summary id="linesSummary">Your own lines (optional)</summary>
@@ -155,6 +183,7 @@
             <button class="button small" type="button" id="removeLines">Remove lines</button>
           </div>
         </details>
+        </div>
 
         <details class="inline-details">
           <summary>How to read this chart</summary>
@@ -165,6 +194,8 @@
               <li>Levodopa leaves the blood fast: about half is gone in 1½ hours (Nutt 2008). So immediate-release doses rise and fall sharply, and extended-release products spread the level out.</li>
               <li>In later PD, symptoms follow the level more closely. Wearing-off tends to line up with low points, and peak-dose dyskinesia with high points. Some dyskinesia comes at low levels instead (Contin 2010). Early in PD, a long-duration response builds up over weeks. It lifts the low points, which may partly explain why early wearing-off goes unnoticed (Nutt 2008).</li>
               <li>In advanced PD, the body’s response trails the blood level by roughly half an hour (Mao 2013), so symptoms come a little after the times shown. Early in PD the lag is much longer. Meals, protein and stomach emptying also shift real levels.</li>
+              <li>Amantadine or Gocovri adds a second chart underneath, on the same clock. It shows the modeled amantadine level in ng/mL, and the numbers ①, ②… mark the levodopa dose times. The two charts use different scales, so compare when each is high or low, not how tall the curves are.</li>
+              <li>Amantadine leaves the body slowly: about half is gone in 16 hours, so the level never falls far between doses. Gocovri taken at bedtime is lowest in the first hours of the night and high from morning through the day’s levodopa doses. Immediate-release amantadine taken in the morning and afternoon peaks in the evening instead (Hauser 2019).</li>
             </ol>
           </div>
         </details>
@@ -210,7 +241,7 @@
         <summary>Medicines, strengths and sources</summary>
         <div class="details-body">
           <div class="drug-cards" id="drugCards"></div>
-          <p>This covers five levodopa products. Levodopa infusions, dopamine agonists, MAO-B inhibitors, COMT inhibitors and other add-on medicines are not shown on the chart.</p>
+          <p>This covers five levodopa products and two amantadine products (immediate-release amantadine and Gocovri). Levodopa infusions, Osmolex ER, dopamine agonists, MAO-B inhibitors, COMT inhibitors and other add-on medicines are not shown on the charts.</p>
         </div>
       </details>
 
@@ -221,7 +252,8 @@
           <p>Not modeled: meals and protein, slow stomach emptying, kidney and liver function, drug interactions, the carbidopa amount (10/100 and 25/100 tablets are drawn the same), and differences between people.</p>
           <p>The chart shows modeled blood levels, not how a person moves. The body’s response trails the level by roughly half an hour in advanced PD, and the level each person needs changes as PD advances (Mao 2013; Contin 2010).</p>
           <p>Blood-level studies report ng/mL. For example, Wach 2026 cites older studies that put the level where levodopa starts to work at about 750–1000 ng/mL. That level differs between people and rises as PD advances (Contin 2010). Those studies used different people and methods, so treat any conversion to this chart’s scale as rough.</p>
-          <p>LEDD uses the consensus conversion factors of Jost 2023. Crexont was approved after that review, so its factor (×0.5, the Rytary factor) is an assumption; its label switches from Rytary at about 1:1 by levodopa mg.</p>
+          <p>Amantadine is a different drug, so it is modeled on its own chart, in ng/mL, for a typical person with PD at steady state. Its half-life is about 16 hours: levels take about 4 days to settle and never fall far between doses. The size of the curve comes from steady-state studies in healthy volunteers, raised 1.6 times for the lower kidney clearance of the PD patients in the Gocovri trials (Hauser 2019). Amantadine leaves through the kidneys, and kidney function is not modeled: with weaker kidneys or older age, real levels are higher and last longer. The chart shows the level only, not amantadine’s effect on dyskinesia or OFF time.</p>
+          <p>LEDD uses the consensus conversion factors of Jost 2023. Crexont was approved after that review, so its factor (×0.5, the Rytary factor) is an assumption; its label switches from Rytary at about 1:1 by levodopa mg. Amantadine counts by its hydrochloride mg: immediate release ×1 and Gocovri ×1.25. Gocovri is labeled in mg of amantadine (137 mg is 170 mg of the hydrochloride), so 274 mg counts as 425 mg.</p>
           <h4>References</h4>
           <ol class="references" id="references"></ol>
         </div>
