@@ -14,8 +14,7 @@ export const TIPS = {
   highest: "The highest modeled level of the day, and when it happens. Peak-dose effects such as dyskinesia are most likely around peaks.",
   lowest: "The lowest modeled level of the day, and when it happens. Wearing-off is most likely around troughs, often early morning before the first dose.",
   fluctuation: "(Peak − trough) ÷ the day's average level. It's a standard pharmacokinetic measure of how much levels swing. 0 would be perfectly steady, like a continuous infusion. Higher means bigger swings.",
-  // Added with amantadine (model 4.1.0). These two are not yet signed off
-  // word for word by the owner; test/copy.test.js lists them apart.
+  // Added with amantadine (model 4.1.0); owner-approved like the rest.
   leddAmantadine: "How much this dose counts toward the day's levodopa-equivalent dose. Amantadine counts by its hydrochloride (HCl) mg: immediate release ×1, Gocovri ×1.25 (Jost 2023). Gocovri capsules are labeled in mg of amantadine, and 137 mg is 170 mg HCl, so 274 mg counts as 340 × 1.25 = 425 mg. Use it to compare total medication load. It is not a dose-conversion tool.",
   amantadineLevel: "Modeled plasma amantadine in ng/mL at steady state, for a typical person with PD. Amantadine is a different drug on a different scale, so compare the two charts by time, not by height. It leaves through the kidneys, so real levels vary a lot with kidney function and age. In the Gocovri trials, people taking 274 mg at bedtime had about 1,500 ng/mL during the day (Hauser 2019)."
 };
